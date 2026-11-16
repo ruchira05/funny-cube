@@ -27,16 +27,20 @@
 // ---- Touch strip ----
 // On the ESP32-S3 the touchRead() value RISES when touched.
 // Touched when raw > baseline * ON factor, released when raw < baseline * OFF factor.
-// Tune these from the raw values printed when TOUCH_DEBUG is 1.
-#define TOUCH_ON_FACTOR 1.10f
-#define TOUCH_OFF_FACTOR 1.05f
+// Tune these with the touch_cal test (pio run -e touch_cal -t upload -t monitor).
+// Measured 2026-11-15 (touch.log, mic off): idle noise x1.001, hand on the cube
+// but not the strip x1.002, finger x1.06-1.10. ON sits about halfway, OFF lower
+// for hysteresis. The old 1.10 / 1.05 were above most finger readings.
+#define TOUCH_ON_FACTOR 1.03f
+#define TOUCH_OFF_FACTOR 1.015f
 #define TOUCH_DEBUG 1           // 1: print raw touch values every 500 ms
 #define TOUCH_SAMPLE_MS 10      // sampling interval
 #define TOUCH_FILTER_SAMPLES 3  // consecutive samples needed to change state
 #define TOUCH_TAP_MAX_MS 800    // a press shorter than this is a "tap"
 // Re-measuring the baseline (e.g. when the mic clock starts and raises the
-// untouched reading by about 16%): readings above baseline x this are taken as a
-// finger, and the re-measure waits until it is lifted. Fingers read 1.6x or more.
+// untouched reading, x1.09 in touch.log): readings above baseline x this are taken
+// as a finger, and the re-measure waits until it is lifted.
+// TODO: unchanged until the mic-on touch reading is measured (step 5 of touch_cal).
 #define TOUCH_REBASE_MAX_FACTOR 1.35f
 
 // ---- Boot gestures (touch held while powering on) ----

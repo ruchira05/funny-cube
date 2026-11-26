@@ -4,6 +4,7 @@
 
 #include <algorithm>
 
+#include "alarms.h"
 #include "config.h"
 #include "settings.h"
 
@@ -72,7 +73,7 @@ void Net::onConnected() {
   state_ = State::Connected;
   lostSince_ = 0;
   version_++;
-  configTzTime(settings.timezone().c_str(), NTP_SERVER_1, NTP_SERVER_2);  // used from Stage 4
+  timeOnConnected();  // SNTP: clock for alarms, reminders and the focus face
   Serial.printf("[net] connected to \"%s\" %s, server %s, API key %s\n", WiFi.SSID().c_str(),
                 WiFi.localIP().toString().c_str(),
                 settings.serverUrl().isEmpty() ? "(not set)" : settings.serverUrl().c_str(),

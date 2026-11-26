@@ -8,6 +8,9 @@
 // Shows progress on the display. Returns true when connected.
 bool connectToSavedNetworks();
 
+// <head> and style shared by the setup page and the settings page (webconfig.cpp).
+String pageHead(const char* title);
+
 class SetupPortal {
  public:
   enum class Attempt { None, Testing, Connected, Failed };

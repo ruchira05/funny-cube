@@ -1,4 +1,5 @@
-// Key Cube firmware, Stage 2: cube orientation and modes (on top of Stage 1 WiFi setup).
+// Key Cube firmware, Stage 4: clock, alarm, health reminders and focus timer
+// (on top of Stage 1 WiFi setup, Stage 2 orientation and Stage 3 key buddy).
 //
 // Power-on:
 //   - boot screen says "Hold strip: setup": touch it within 2 s and hold 3 s -> setup,
@@ -7,14 +8,18 @@
 //   - otherwise connect to saved networks (strongest first); on failure -> setup mode
 // Running: the face the cube stands on selects the mode, the screen rotates to match.
 //   - back face (screen up): screen off, deep sleep after 3 s
-//   - side faces: modes A-D (placeholders in Stage 2). Tap = WiFi/server status.
-// Wake (tilt or touch): read the face; still on the back face -> sleep again;
-//   otherwise show the mode at once and reconnect WiFi in the background.
+//   - side faces: A key buddy, B alarm, C health reminders, D focus timer and clock
+//   - alarms ring in every mode (and wake the cube); reminders in the side modes
+//   - settings page for alarms, reminders, timer and volume: http://keycube.local
+// Wake (tilt, touch or the alarm timer): read the face; still on the back face and
+//   no alarm due soon -> sleep again; otherwise show the mode at once and reconnect
+//   WiFi in the background.
 //   After a touch wake, keep holding the strip 3 s / 10 s for setup / factory reset.
 #include <Arduino.h>
 #include <WiFi.h>
 #include <Wire.h>
 
+#include "alarms.h"
 #include "config.h"
 #include "display.h"
 #include "modes.h"
@@ -22,7 +27,9 @@
 #include "orientation.h"
 #include "power.h"
 #include "settings.h"
+#include "speaker.h"
 #include "touch.h"
+#include "webconfig.h"
 #include "wifi_setup.h"
 
 namespace {
@@ -204,6 +211,7 @@ void loopSetup() {
 
 void loopRun() {
   net.loop();
+  webConfig.loop();
   modes.loop();
 }
 
@@ -214,8 +222,11 @@ void setup() {
   bool woke = wake != WakeReason::PowerOn;
 
   Serial.begin(115200);
-  // Start the touch sensor first: its reading settles during the serial delay.
   settings.begin();
+  // The speaker's I2S clock runs from now on (amp off): it shifts the touch
+  // reading, so it must be running before touch is calibrated.
+  speaker.begin();
+  // Start the touch sensor early: its reading settles during the serial delay.
   touch.begin(PIN_TOUCH, settings.touchBaseline());
   if (!woke) {
     delay(1500);  // let the USB serial monitor attach (skipped on wake for speed)
@@ -230,6 +241,7 @@ void setup() {
     display.showBoot();
   }
   orientation.begin();
+  schedule.begin();  // timezone; the clock kept running through deep sleep
 
   // Setup gesture: touch held at power-on, or after a touch wake. A tilt wake
   // skips it, so the cube shows its mode at once (touch settles in the background).
@@ -258,8 +270,10 @@ void setup() {
 
   if (woke) {
     // Bumped or tapped while lying on the off face: go straight back to sleep
-    // without turning on WiFi or the screen.
-    if (orientation.waitForFace(WAKE_FACE_TIMEOUT_MS) == Face::Back) {
+    // without turning on WiFi or the screen. Unless an alarm is close (the timer
+    // wake): then stay up, re-sync the time over WiFi, and ring.
+    if (orientation.waitForFace(WAKE_FACE_TIMEOUT_MS) == Face::Back &&
+        !schedule.alarmSoon(ALARM_PREWAKE_S)) {
       Serial.println("[wake] still on the off face");
       goToSleep();
     }

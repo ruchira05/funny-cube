@@ -1,10 +1,14 @@
 #include "modes.h"
 
+#include "alarms.h"
+#include "clockmodes.h"
 #include "config.h"
 #include "display.h"
+#include "focus.h"
 #include "keybuddy.h"
 #include "net.h"
 #include "power.h"
+#include "speaker.h"
 #include "touch.h"
 
 Modes modes;
@@ -68,27 +72,95 @@ void Modes::enter(Mode m, Face f) {
   overlayUntil_ = 0;
   if (m == Mode::Off) {
     display.off();
+    focus.reset();  // the off face stops the focus timer
     offSince_ = millis();
     usbNoSleepLogged_ = false;
+    awakeForAlarmLogged_ = false;
     return;
   }
   display.on();
   display.setRotation((uint8_t)f - (uint8_t)Face::R0);  // R0..R3 -> 0..3
   dirty_ = true;
-  if (m == Mode::KeyBuddy) keyBuddy.enter();  // Stage 3
+  switch (m) {
+    case Mode::KeyBuddy: keyBuddy.enter(); break;   // Stage 3
+    case Mode::Alarm: alarmMode.enter(); break;     // Stage 4
+    case Mode::Health: healthMode.enter(); break;   // Stage 4
+    case Mode::Focus: focusMode.enter(); break;     // Stage 4
+    default: break;
+  }
 }
 
 void Modes::exit(Mode m) {
-  // Modes stop recording, timers and sounds here.
+  // Modes stop recording here. The focus timer keeps running on other faces.
   if (m == Mode::KeyBuddy) keyBuddy.exit();
 }
 
 void Modes::loop() {
-  if (orientation.present() && orientation.consumeFaceChange()) apply(orientation.face());
+  // ---- Stage 4: schedule, focus timer and alerts, in every mode ----
+  bool busy = mode_ == Mode::KeyBuddy && keyBuddy.busy();
+  bool offFace = mode_ == Mode::Off || (inAlert_ && face_ == Face::Back);
+  schedule.loop(offFace, busy);
+  focus.tick();
+  if (!alerts.active() && !busy && !offFace && mode_ != Mode::Focus) {
+    String title, body;
+    Sound sound;
+    if (focus.consumeNotice(title, body, sound)) alerts.startNotice(title, body, sound);
+  }
+
+  if (alerts.consumeStarted()) {
+    // Pause the mode underneath (key buddy stops the mic: no recording of the
+    // speaker). Lying on the back, the screen faces up: draw it unrotated.
+    Serial.printf("[mode] alert over %s\n", modeName(mode_));
+    exit(mode_);
+    mode_ = Mode::None;
+    inAlert_ = true;
+    display.on();
+    if (face_ == Face::Back || face_ == Face::Unknown) display.setRotation(0);
+  }
+
+  if (orientation.present() && orientation.consumeFaceChange()) {
+    Face f = orientation.face();
+    if (!inAlert_) {
+      apply(f);
+    } else if (f != Face::Unknown && f != face_) {
+      // Picked up while ringing: keep the alert, turn the screen to face the user.
+      face_ = f;
+      if (f != Face::Back) display.setRotation((uint8_t)f - (uint8_t)Face::R0);
+      alerts.redraw();
+    }
+  }
+
+  if (inAlert_) {
+    alerts.loop();
+    if (alerts.consumeEnded()) {
+      inAlert_ = false;
+      Face f = face_;
+      face_ = Face::Unknown;
+      if (orientation.present()) {
+        apply(f == Face::Unknown ? Face::R0 : f);  // resume the mode for the face
+      } else {
+        display.setRotation(0);
+        dirty_ = true;
+      }
+    }
+    return;
+  }
 
   if (mode_ == Mode::Off) {
     touch.consumeTap();
+    touch.consumeHold();
     if (millis() - offSince_ < OFF_SLEEP_DELAY_MS) return;
+    if (speaker.playing()) return;
+    if (schedule.alarmSoon(ALARM_PREWAKE_S)) {
+      // Close to an alarm: stay awake (screen off, WiFi on to correct the time).
+      if (!awakeForAlarmLogged_) {
+        awakeForAlarmLogged_ = true;
+        Serial.printf("[sleep] alarm at %s: staying awake until it rings\n",
+                      hhmm(schedule.nextAlarm()).c_str());
+      }
+      return;
+    }
+    awakeForAlarmLogged_ = false;
 #if DEV_NO_SLEEP_ON_USB  // DEV-ONLY: remove after development
     if (usbHostConnected()) {
       if (!usbNoSleepLogged_) {
@@ -102,10 +174,16 @@ void Modes::loop() {
     goToSleep();
   }
 
-  if (mode_ == Mode::KeyBuddy) {  // Stage 3: the mode draws and handles touch itself
-    keyBuddy.loop();
-    return;
+  // The modes draw and handle touch themselves.
+  switch (mode_) {
+    case Mode::KeyBuddy: keyBuddy.loop(); return;
+    case Mode::Alarm: alarmMode.loop(); return;
+    case Mode::Health: healthMode.loop(); return;
+    case Mode::Focus: focusMode.loop(); return;
+    default: break;
   }
+
+  // No accelerometer: the Stage 1 status screen. Tap re-checks the server.
 
   uint32_t now = millis();
   if (touch.consumeTap()) {
@@ -128,15 +206,9 @@ void Modes::loop() {
 }
 
 void Modes::draw() {
-  bool noSensor = !orientation.present();
-  if (overlayUntil_ || noSensor) {
-    String server = net.healthPending()  ? String("Checking server...")
-                    : net.healthKnown() ? net.health().message
-                                        : net.shortStatus();
-    if (noSensor) server += " | No tilt sensor";
-    display.showStatus(net.ssid(), net.ip(), server, net.connected() && net.health().ok);
-    return;
-  }
-  const ModeInfo& info = MODE_FOR_FACE[(int)face_];
-  display.showMode(info.name, info.label, info.icon, net.shortStatus());
+  String server = net.healthPending()  ? String("Checking server...")
+                  : net.healthKnown() ? net.health().message
+                                      : net.shortStatus();
+  server += " | No tilt sensor";
+  display.showStatus(net.ssid(), net.ip(), server, net.connected() && net.health().ok);
 }

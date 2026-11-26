@@ -91,8 +91,11 @@ esp32/
    ├─ faces.cpp/.h       # emotion faces                                            (3)
    ├─ keybuddy.cpp/.h    # mode A: hold to talk, thinking, reply pages              (3)
    ├─ audio.cpp/.h       # I2S mic, record to PSRAM                                 (3)
-   ├─ speaker.cpp/.h     # I2S output to the MAX98357A: tones, beeps, playback      (4)
-   └─ alarms.cpp/.h      # NTP time, schedules, alarm sounds                        (4)
+   ├─ speaker.cpp/.h     # I2S output to the MAX98357A: tones and beeps             (4)
+   ├─ alarms.cpp/.h      # NTP time, alarm and reminder schedule, alert screens     (4)
+   ├─ clockmodes.cpp/.h  # mode B (alarm) and mode C (health reminders) screens     (4)
+   ├─ focus.cpp/.h       # mode D: focus timer and large clock                      (4)
+   └─ webconfig.cpp/.h   # settings page at http://keycube.local                    (4)
 ```
 
 ---
@@ -385,20 +388,30 @@ MAX98357A I2S amplifier and a 4 Ω 5 W 40 mm speaker. The speaker replaces the b
 
 ### 4.2 Features
 
-- **Time:** NTP sync after WiFi connects, using the timezone from Stage 1 settings. Re-sync every 6 hours. Show "--:--" until the first sync.
-- **Alarm (Mode B):** next alarm and the time. At alarm time, play the alarm tone and flash the screen. Touch to snooze (5 min). Hold to dismiss. An alarm also fires if the cube is in another mode, but not in deep sleep unless a timer wake is set.
-- **Health reminders (Mode C):** water, stretch and posture at fixed intervals. Show the next reminder and a count for the day. Touch to acknowledge.
-- **Focus timer or clock (Mode D):** 25 / 5 minute Pomodoro, touch to start or pause, with a large clock when no timer is running.
-- **Storage:** alarm times and reminder intervals in NVS. Add fields to the setup portal or a local settings page at `http://keycube.local` (mDNS).
-- **Off-face sleep with alarms:** before deep sleep, set a timer wake for the next alarm or reminder.
+No extra libraries: the ESP32 core has `ESP_I2S`, SNTP, `WebServer` and `ESPmDNS`.
+
+- **Speaker (`speaker.cpp`):** sine tones with a short fade in and out (no clicks), played by a background task so screens keep updating. 16 kHz, 16-bit, the same sample on both I2S slots. The I2S clock runs all the time (silence when idle): its pins (15–17) sit next to the touch pin on the header, and a clock that starts and stops would shift the touch reading. The amp is on (SD high) only while a sound plays, and SD is held low through deep sleep. Volume 0–100 on the settings page, capped at `SPK_MAX_AMPLITUDE`. The alarm starts at 40 % and rises to full over 30 s, and never rings below `SPK_ALARM_MIN_VOLUME`.
+- **Time:** SNTP after WiFi connects, in the timezone from the setup page, re-synced every 6 hours. The RTC keeps time through deep sleep. After a power cut the clock shows `--:--` until the first sync, and alarms wait for it.
+- **Alarm (Mode B, `clockmodes.cpp`):** clock and the next alarm with "in 2h 05m". Up to 4 alarms, each once or on chosen weekdays. When it rings (in any mode, also from deep sleep): the screen flashes, **tap = snooze 5 min, hold 1.5 s = stop**. It stops by itself after 10 minutes. In the mode: tap shows the alarm list, then the status page; hold switches all alarms on/off (or cancels a snooze). A one-time alarm switches itself off after it rings.
+- **Health reminders (Mode C, `clockmodes.cpp`):** water, stretch and posture, each on/off with its own interval (default 60 / 50 / 40 min), only between active hours (default 09:00–18:00). The screen shows what was done today and when each is next. A reminder pops up over any side mode with a chime (again after 1 min): **tap = done** (counted for today), **hold = skip**, unanswered for 2 min = missed. The next interval counts from the answer. Hold in the mode pauses all reminders.
+- **Focus timer or clock (Mode D, `focus.cpp`):** a large clock when idle. Tap starts 25 min of focus, then a 5 min break (15 min after every 4th), with a sound at each change. Tap pauses and resumes, hold resets. The timer keeps running on the other side faces; a period that ends there shows a short notice.
+- **Alerts (`alarms.cpp`):** the alarm, reminder and notice screens sit on top of whatever mode is active, and the mode pauses underneath. Key buddy stops the mic, so nothing records the speaker. Reminders and notices wait while key buddy is recording or thinking; an alarm doesn't wait. A finger already on the strip when an alert starts is ignored until it is lifted.
+- **Settings page (`webconfig.cpp`):** `http://keycube.local` (mDNS) or the IP address shown on the status page (tap in Alarm or Health mode). Alarms, reminders and active hours, focus lengths, volume, a test sound and a test alarm. No login, so anyone on the same WiFi can change alarms. It never shows WiFi passwords or the API key. WiFi, server and timezone stay on the setup hotspot page.
+- **Storage:** alarms, reminders, focus lengths, volume and today's counts are in NVS (a factory reset clears them). Snooze, the next reminder times and the last alarm check are in RTC memory, so they survive deep sleep but not a power cut.
+- **Off face:** the off face means off. No reminders, and the focus timer resets. Alarms still ring: before deep sleep a timer wake is set **15 minutes before** the next alarm (`ALARM_PREWAKE_S`). The internal RC clock that keeps time in deep sleep can drift by minutes over a night, so the cube wakes early, joins WiFi to correct the time, and waits awake with the screen off. An alarm found up to 10 minutes late (cube unplugged, or the clock jumped at a sync) still rings; older ones don't.
+- **Touch:** a hold (1.5 s, `TOUCH_HOLD_MS`) is now an event of its own, so a long press never counts as a tap. The stored touch baseline has a version number: the first boot of this firmware measures it again with the speaker clock running.
 
 ### 4.3 Stage 4 test checklist
 
+- [ ] The test sound on the settings page plays cleanly at volume 30, 60 and 100, with no click when the amp switches on or off, and no resets (USB power).
+- [ ] Touch still works in every mode with the speaker clock running. Check the boot log baseline, then use `touch_cal` if taps are missed.
 - [ ] Clock matches your phone within 1 s after sync.
-- [ ] Alarm fires on time in Modes A–D, and from deep sleep.
-- [ ] Snooze and dismiss work by touch.
-- [ ] Reminders fire at their intervals and survive a reboot.
-- [ ] Focus timer runs and beeps at the end of each period.
+- [ ] The settings page opens at `http://keycube.local` (or the IP), and saving keeps the values after a reboot.
+- [ ] Alarm fires on time in Modes A–D, and from deep sleep (log: `timer wake at ...`, then `staying awake until it rings`).
+- [ ] Tap snoozes for 5 min, hold stops. A finger already on the strip doesn't snooze it.
+- [ ] "Ring a test alarm" works while talking to key buddy: the recording stops, and key buddy comes back afterwards.
+- [ ] Reminders fire at their intervals, only within active hours, and survive a reboot (settings and today's counts).
+- [ ] Focus timer runs, beeps at the end of each period, pauses, resets, and shows a notice when it ends on another face.
 
 ### 4.4 Later: voice-set reminders
 

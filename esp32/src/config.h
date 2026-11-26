@@ -3,7 +3,7 @@
 // phone setup page and stored in flash (see settings.h).
 #pragma once
 
-#define FW_VERSION "0.3.0-stage3"
+#define FW_VERSION "0.4.0-stage4"
 
 // ---- Pins (see ESP32_PLAN.md, pin map) ----
 #define PIN_I2C_SDA 8
@@ -37,6 +37,7 @@
 #define TOUCH_SAMPLE_MS 10      // sampling interval
 #define TOUCH_FILTER_SAMPLES 3  // consecutive samples needed to change state
 #define TOUCH_TAP_MAX_MS 800    // a press shorter than this is a "tap"
+#define TOUCH_HOLD_MS 1500      // a press this long is a "hold" (stop alarm, reset timer, on/off)
 // Re-measuring the baseline (e.g. when the mic clock starts and raises the
 // untouched reading, x1.09 in touch.log): readings above baseline x this are taken
 // as a finger, and the re-measure waits until it is lifted.
@@ -117,6 +118,43 @@
 #define CHAT_TIMEOUT_MS 30000   // server reply (matches nginx proxy_read_timeout)
 #define REPLY_PAGE_MS 5000      // long replies: next page after this long
 #define REPLY_HOLD_MS 20000     // last page stays this long, then back to "Hold to talk"
+
+// ---- Speaker (Stage 4): MAX98357A + 4 ohm 40 mm speaker ----
+// The I2S clock runs all the time (silence when idle): its pins sit next to the
+// touch pin on the header, so a clock that starts and stops would shift the touch
+// reading. The amp itself is off (SD low) between sounds and in deep sleep.
+#define SPK_SAMPLE_RATE 16000
+#define SPK_MAX_AMPLITUDE 0.8f  // of full scale at volume 100 (caps the drive into the speaker)
+#define SPK_DEFAULT_VOLUME 60   // 0..100, changed on the settings page
+#define SPK_ALARM_MIN_VOLUME 30 // the alarm rings at least this loud, even at volume 0
+#define SPK_AMP_WAKE_MS 10      // amp start-up after SD goes high
+// Full volume draws up to about 0.7 A at 5 V. If the cube resets when the alarm
+// rings on a weak USB port, lower the volume.
+
+// ---- Time, alarms and reminders (Stage 4) ----
+#define NTP_RESYNC_MS (6UL * 3600UL * 1000UL)  // re-sync every 6 hours
+#define MAX_ALARMS 4
+#define SNOOZE_MIN 5
+#define ALARM_RING_MAX_MS 600000UL   // stop ringing after 10 minutes
+#define ALARM_RAMP_MS 30000          // ring volume rises from 40% to 100% over 30 s
+#define ALARM_LATE_MAX_S 600         // an alarm found up to 10 min late still rings
+// Deep sleep keeps time with the chip's internal RC clock, which can drift by
+// minutes over a night. So the cube wakes this long before an alarm, joins WiFi
+// to correct the time, and waits awake (screen off) for it.
+#define ALARM_PREWAKE_S 900
+#define REMINDER_SHOW_MS 120000UL    // a reminder not answered in 2 min counts as missed
+#define REMINDER_REPEAT_MS 60000UL   // chime again after 1 min
+#define REMINDER_STALE_S 300         // due over 5 min ago (cube was off): skip, don't fire
+#define NOTICE_SHOW_MS 10000UL       // focus timer notices in other modes
+#define DEFAULT_REMIND_FROM 9        // reminders only between these hours
+#define DEFAULT_REMIND_TO 18
+#define DEFAULT_FOCUS_WORK_MIN 25
+#define DEFAULT_FOCUS_BREAK_MIN 5
+#define DEFAULT_FOCUS_LONG_MIN 15
+#define FOCUS_LONG_EVERY 4           // a long break after every 4 focus periods
+
+// ---- Settings page on the local network (Stage 4) ----
+#define MDNS_NAME "keycube"          // http://keycube.local
 
 // ================================================================
 // DEV-ONLY: remove after development (grep "DEV-ONLY")

@@ -43,9 +43,10 @@ String htmlEscape(const String& s) {
   return out;
 }
 
-const char* PAGE_HEAD = R"HTML(<!doctype html><html><head><meta charset="utf-8">
+const char* PAGE_HEAD_START = R"HTML(<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Key Cube setup</title><style>
+<title>)HTML";
+const char* PAGE_HEAD_STYLE = R"HTML(</title><style>
 body{font-family:-apple-system,system-ui,sans-serif;max-width:480px;margin:0 auto;padding:16px;background:#f4f4f5;color:#18181b}
 h1{font-size:22px;margin:4px 0 12px}h2{font-size:16px;margin:20px 0 8px}
 .card{background:#fff;border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 1px 2px #0001}
@@ -58,8 +59,14 @@ a{color:#2563eb}
 @media(prefers-color-scheme:dark){body{background:#18181b;color:#f4f4f5}.card{background:#27272a}input,select{background:#18181b;color:#f4f4f5;border-color:#3f3f46}label{color:#a1a1aa}}
 </style></head><body>)HTML";
 
+const String PAGE_HEAD = pageHead("Key Cube setup");
+
 int signalBars(int rssi) { return rssi > -55 ? 4 : rssi > -65 ? 3 : rssi > -75 ? 2 : 1; }
 }  // namespace
+
+String pageHead(const char* title) {
+  return String(PAGE_HEAD_START) + title + PAGE_HEAD_STYLE;
+}
 
 // ------------------------------------------------------------------
 // Connect to saved networks
@@ -303,7 +310,7 @@ void SetupPortal::setupRoutes() {
     else if (attempt_ == Attempt::Testing) err = "Already testing a network. Wait a moment.";
     if (!err.isEmpty()) {
       server.send(200, "text/html",
-                  String(PAGE_HEAD) + "<h1>Key Cube setup</h1><div class='card'><p>" + err +
+                  PAGE_HEAD + "<h1>Key Cube setup</h1><div class='card'><p>" + err +
                       "</p><a href='/'>Back</a></div></body></html>");
       return;
     }

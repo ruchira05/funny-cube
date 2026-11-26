@@ -18,6 +18,8 @@ class KeyBuddy {
   void enter();  // mic on (after the display rotation is set)
   void exit();   // mic off; a request in flight is finished but its reply dropped
   void loop();
+  // Recording or waiting for a reply: reminders and notices wait (alarms don't).
+  bool busy() const { return st_ == St::Recording || st_ == St::Thinking; }
 
  private:
   enum class St { Idle, Recording, Thinking, Reply, Error, Status };

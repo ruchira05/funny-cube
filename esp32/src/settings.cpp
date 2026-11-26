@@ -28,6 +28,19 @@ String randomPassword() {
 }
 
 String key(int i, const char* field) { return "n" + String(i) + "_" + field; }
+
+// The stored touch baseline is only valid for the same electrical conditions.
+// Version 2: measured with the speaker's I2S clock running (Stage 4), which raises
+// the reading. An older baseline is dropped and measured again at the next boot.
+constexpr uint8_t TOUCH_BASELINE_VERSION = 2;
+
+const ReminderSlot DEFAULT_REMINDERS[REMINDER_COUNT] = {
+    {1, 60},  // water every hour
+    {1, 50},  // stretch
+    {1, 40},  // posture
+};
+
+uint8_t clampU8(int v, int lo, int hi) { return (uint8_t)(v < lo ? lo : v > hi ? hi : v); }
 }  // namespace
 
 void Settings::begin() {
@@ -48,6 +61,25 @@ void Settings::load() {
     prefs_.putString("appass", apPass_);
   }
   touchBaseline_ = prefs_.getUInt("touchbase", 0);
+  if (prefs_.getUChar("touchver", 0) != TOUCH_BASELINE_VERSION) touchBaseline_ = 0;
+
+  // Stage 4: alarms, reminders, focus timer, volume.
+  for (int i = 0; i < MAX_ALARMS; i++) alarms_[i] = {7, 0, 0x3E, 0};  // 07:00 Mon-Fri, off
+  if (prefs_.getBytesLength("alarms") == sizeof(alarms_)) prefs_.getBytes("alarms", alarms_, sizeof(alarms_));
+  alarmsOn_ = prefs_.getBool("alarmson", true);
+  memcpy(rem_, DEFAULT_REMINDERS, sizeof(rem_));
+  if (prefs_.getBytesLength("rem") == sizeof(rem_)) prefs_.getBytes("rem", rem_, sizeof(rem_));
+  remOn_ = prefs_.getBool("remon", true);
+  remFrom_ = prefs_.getUChar("remfrom", DEFAULT_REMIND_FROM);
+  remTo_ = prefs_.getUChar("remto", DEFAULT_REMIND_TO);
+  healthDay_ = prefs_.getUInt("hday", 0);
+  memset(healthCount_, 0, sizeof(healthCount_));
+  if (prefs_.getBytesLength("hcount") == sizeof(healthCount_))
+    prefs_.getBytes("hcount", healthCount_, sizeof(healthCount_));
+  focusWork_ = prefs_.getUChar("fwork", DEFAULT_FOCUS_WORK_MIN);
+  focusBreak_ = prefs_.getUChar("fbreak", DEFAULT_FOCUS_BREAK_MIN);
+  focusLong_ = prefs_.getUChar("flong", DEFAULT_FOCUS_LONG_MIN);
+  volume_ = prefs_.getUChar("vol", SPK_DEFAULT_VOLUME);
   seq_ = prefs_.getUInt("seq", 0);
   loadNetworks();
 }
@@ -144,6 +176,71 @@ void Settings::setTouchBaseline(uint32_t v) {
   if (touchBaseline_ && diff * 50 < touchBaseline_) return;  // under 2%
   touchBaseline_ = v;
   prefs_.putUInt("touchbase", v);
+  prefs_.putUChar("touchver", TOUCH_BASELINE_VERSION);
+}
+
+void Settings::setAlarm(int i, const AlarmSlot& a) {
+  if (i < 0 || i >= MAX_ALARMS) return;
+  AlarmSlot v = {clampU8(a.hour, 0, 23), clampU8(a.minute, 0, 59), (uint8_t)(a.days & 0x7F),
+                 (uint8_t)(a.on ? 1 : 0)};
+  if (memcmp(&v, &alarms_[i], sizeof(v)) == 0) return;
+  alarms_[i] = v;
+  prefs_.putBytes("alarms", alarms_, sizeof(alarms_));
+}
+
+void Settings::setAlarmsOn(bool on) {
+  if (on == alarmsOn_) return;
+  alarmsOn_ = on;
+  prefs_.putBool("alarmson", on);
+}
+
+void Settings::setReminder(int k, const ReminderSlot& r) {
+  if (k < 0 || k >= REMINDER_COUNT) return;
+  int every = r.everyMin < 5 ? 5 : r.everyMin > 480 ? 480 : r.everyMin;
+  ReminderSlot v = {(uint8_t)(r.on ? 1 : 0), (uint16_t)every};
+  if (v.on == rem_[k].on && v.everyMin == rem_[k].everyMin) return;
+  rem_[k] = v;
+  prefs_.putBytes("rem", rem_, sizeof(rem_));
+}
+
+void Settings::setRemindersOn(bool on) {
+  if (on == remOn_) return;
+  remOn_ = on;
+  prefs_.putBool("remon", on);
+}
+
+void Settings::setRemindHours(uint8_t from, uint8_t to) {
+  remFrom_ = clampU8(from, 0, 23);
+  remTo_ = clampU8(to, 0, 23);
+  prefs_.putUChar("remfrom", remFrom_);
+  prefs_.putUChar("remto", remTo_);
+}
+
+void Settings::addHealthCount(int k, uint32_t day) {
+  if (k < 0 || k >= REMINDER_COUNT) return;
+  if (day != healthDay_) {  // a new day: start counting from zero
+    healthDay_ = day;
+    memset(healthCount_, 0, sizeof(healthCount_));
+    prefs_.putUInt("hday", day);
+  }
+  if (healthCount_[k] < 255) healthCount_[k]++;
+  prefs_.putBytes("hcount", healthCount_, sizeof(healthCount_));
+}
+
+void Settings::setFocus(uint8_t work, uint8_t brk, uint8_t longBrk) {
+  focusWork_ = clampU8(work, 1, 120);
+  focusBreak_ = clampU8(brk, 1, 60);
+  focusLong_ = clampU8(longBrk, 1, 60);
+  prefs_.putUChar("fwork", focusWork_);
+  prefs_.putUChar("fbreak", focusBreak_);
+  prefs_.putUChar("flong", focusLong_);
+}
+
+void Settings::setVolume(uint8_t v) {
+  if (v > 100) v = 100;
+  if (v == volume_) return;
+  volume_ = v;
+  prefs_.putUChar("vol", v);
 }
 
 void Settings::factoryReset() {

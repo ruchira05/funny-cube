@@ -51,6 +51,8 @@ void Display::begin() {
   u8g2.setBusClock(400000);
   u8g2.begin();
   u8g2.enableUTF8Print();
+  rotation_ = 0xFF;  // force the first setRotation through
+  setRotation(DISPLAY_UPRIGHT_ROTATION);
 }
 
 U8G2& Display::gfx() { return u8g2; }

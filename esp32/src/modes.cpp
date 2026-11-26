@@ -46,7 +46,7 @@ void Modes::begin() {
   overlayUntil_ = 0;
   if (!orientation.present()) {
     // No accelerometer: behave like Stage 1 (status screen, never sleep).
-    display.setRotation(0);
+    display.setRotation(DISPLAY_UPRIGHT_ROTATION);
     dirty_ = true;
     return;
   }
@@ -109,13 +109,13 @@ void Modes::loop() {
 
   if (alerts.consumeStarted()) {
     // Pause the mode underneath (key buddy stops the mic: no recording of the
-    // speaker). Lying on the back, the screen faces up: draw it unrotated.
+    // speaker). Lying on the back, the screen faces up: draw it upright (DISPLAY_UPRIGHT_ROTATION).
     Serial.printf("[mode] alert over %s\n", modeName(mode_));
     exit(mode_);
     mode_ = Mode::None;
     inAlert_ = true;
     display.on();
-    if (face_ == Face::Back || face_ == Face::Unknown) display.setRotation(0);
+    if (face_ == Face::Back || face_ == Face::Unknown) display.setRotation(DISPLAY_UPRIGHT_ROTATION);
   }
 
   if (orientation.present() && orientation.consumeFaceChange()) {
@@ -139,7 +139,7 @@ void Modes::loop() {
       if (orientation.present()) {
         apply(f == Face::Unknown ? Face::R0 : f);  // resume the mode for the face
       } else {
-        display.setRotation(0);
+        display.setRotation(DISPLAY_UPRIGHT_ROTATION);
         dirty_ = true;
       }
     }

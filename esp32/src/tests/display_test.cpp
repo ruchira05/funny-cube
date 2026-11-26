@@ -162,7 +162,7 @@ void pageRotation() {
     drawArrowPage(q);
     delay(1200);
   }
-  display.setRotation(0);
+  display.setRotation(DISPLAY_UPRIGHT_ROTATION);
 }
 
 void pageFps() {
@@ -226,7 +226,7 @@ void pageScreens() {
     display.showStatus("MyHomeNetwork", "192.168.100.123", "Server: reachable", true);
     hold(1500);
   }
-  display.setRotation(0);
+  display.setRotation(DISPLAY_UPRIGHT_ROTATION);
 }
 
 struct Page {
@@ -266,7 +266,7 @@ void setup() {
 
   display.begin();
   display.on();
-  display.setRotation(0);
+  display.setRotation(DISPLAY_UPRIGHT_ROTATION);
   show(0);
 }
 

@@ -23,16 +23,23 @@
 // 1.3" 128x64 modules are usually SH1106. If the image is shifted by 2 px or
 // garbled, set this to 0 to use the SSD1306 driver.
 #define OLED_SH1106 1
+// Rotation (quarter turns, 0..3 = U8G2_R0..R3) for screens that don't follow a
+// face: boot, setup and configuration pages, and alerts while lying on the back.
+// 2 = turned 180 degrees. The modes on the side faces use FACE_DIR_R0..R3 below.
+#define DISPLAY_UPRIGHT_ROTATION 2
 
 // ---- Touch strip ----
 // On the ESP32-S3 the touchRead() value RISES when touched.
 // Touched when raw > baseline * ON factor, released when raw < baseline * OFF factor.
 // Tune these with the touch_cal test (pio run -e touch_cal -t upload -t monitor).
-// Measured 2026-11-15 (touch.log, mic off): idle noise x1.001, hand on the cube
-// but not the strip x1.002, finger x1.06-1.10. ON sits about halfway, OFF lower
-// for hysteresis. The old 1.10 / 1.05 were above most finger readings.
-#define TOUCH_ON_FACTOR 1.03f
-#define TOUCH_OFF_FACTOR 1.015f
+// Calibrated 2026-11-26 (touch_cal, new strip on GPIO4): untouched noise x1.000,
+// hand on the cube but not the strip x1.02, finger x2.3-2.9 (mic off) and
+// x1.9-2.4 (mic on, against the mic-on baseline). The mic clock raises the
+// untouched reading x1.09; the baseline is re-measured when it starts or stops.
+// ON is well above a gripping hand but low enough to catch a finger as it lands;
+// OFF stays above the hand for hysteresis.
+#define TOUCH_ON_FACTOR 1.15f
+#define TOUCH_OFF_FACTOR 1.06f
 #define TOUCH_DEBUG 1           // 1: print raw touch values every 500 ms
 #define TOUCH_SAMPLE_MS 10      // sampling interval
 #define TOUCH_FILTER_SAMPLES 3  // consecutive samples needed to change state
@@ -40,8 +47,8 @@
 #define TOUCH_HOLD_MS 1500      // a press this long is a "hold" (stop alarm, reset timer, on/off)
 // Re-measuring the baseline (e.g. when the mic clock starts and raises the
 // untouched reading, x1.09 in touch.log): readings above baseline x this are taken
-// as a finger, and the re-measure waits until it is lifted.
-// TODO: unchanged until the mic-on touch reading is measured (step 5 of touch_cal).
+// as a finger, and the re-measure waits until it is lifted. Measured: mic jump
+// x1.09, finger x2.6 against the mic-off baseline.
 #define TOUCH_REBASE_MAX_FACTOR 1.35f
 
 // ---- Boot gestures (touch held while powering on) ----
@@ -87,19 +94,19 @@
 // What the accelerometer reads {x, y, z} (in g) when the cube rests on each face.
 // To set them: with ACCEL_DEBUG 1, rest the cube on a face, copy the "filt"
 // values from the serial log, rounded to 0, 1 or -1. Only the direction matters.
-// The defaults assume the sensor lies flat behind the screen, X to the right,
-// Y up, Z out of the screen.
+// Sensor mounting (seen from the front, screen upright): X points to the back
+// (into the screen), Y to the right, Z down.
 //
 // Rn = the screen rotation that reads upright on that face (U8G2_R0..R3).
 // To fix text that is upside down or sideways on a face, swap the directions of
 // the two faces involved (e.g. R0 <-> R2). Which mode runs on each face is set in
 // modes.cpp (MODE_FOR_FACE).
-#define FACE_DIR_BACK        { 0,  0,  1}  // lying on the back, screen up  -> Off
-#define FACE_DIR_SCREEN_DOWN { 0,  0, -1}  // lying on the screen           -> Off
-#define FACE_DIR_R0          { 0,  1,  0}  // landscape
-#define FACE_DIR_R1          { 1,  0,  0}  // portrait
-#define FACE_DIR_R2          { 0, -1,  0}  // landscape, upside down
-#define FACE_DIR_R3          {-1,  0,  0}  // portrait, the other way
+#define FACE_DIR_BACK        {-1,  0,  0}  // lying on the back, screen up  -> Off
+#define FACE_DIR_SCREEN_DOWN { 1,  0,  0}  // lying on the screen           -> Off
+#define FACE_DIR_R0          { 0,  0, -1}  // landscape
+#define FACE_DIR_R1          { 0,  1,  0}  // portrait
+#define FACE_DIR_R2          { 0,  0,  1}  // landscape, upside down
+#define FACE_DIR_R3          { 0, -1,  0}  // portrait, the other way
 
 // ---- Modes and power ----
 #define OFF_SLEEP_DELAY_MS 3000   // on the off face this long, then deep sleep

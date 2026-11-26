@@ -265,7 +265,7 @@ The listing gives no pin names, so read the silkscreen before wiring. If INT1 is
 - Own MMA8452 driver over `Wire` (no library): ±2 g, 50 Hz, read at 20 Hz, low-pass filtered.
 - Each face has a stored gravity direction (unit vector). A reading belongs to the nearest one if it is within about 30° (`FACE_MIN_DOT` 0.85) and the total is 0.8–1.2 g. Otherwise the cube is moving and the reading is ignored.
 - Switch only after the same face holds for **500 ms**. Raw and filtered readings must agree, so shaking can't trigger a switch.
-- Directions are set per face in `config.h` (`FACE_DIR_BACK`, `FACE_DIR_SCREEN_DOWN`, `FACE_DIR_R0`..`R3`); no calibration step. Lying on the screen also counts as off. The defaults assume the sensor lies flat behind the screen. If it is mounted differently, read the `filt` values from the serial log on each face (`ACCEL_DEBUG 1`) and enter them there. A warning is logged at boot if two directions are less than 60° apart.
+- Directions are set per face in `config.h` (`FACE_DIR_BACK`, `FACE_DIR_SCREEN_DOWN`, `FACE_DIR_R0`..`R3`); no calibration step. Lying on the screen also counts as off. The defaults assume the sensor is mounted with X pointing to the back (into the screen), Y to the right and Z down. If it is mounted differently, read the `filt` values from the serial log on each face (`ACCEL_DEBUG 1`) and enter them there. A warning is logged at boot if two directions are less than 60° apart.
 
 ### 2.4 Mode state machine (`modes.cpp`), WiFi (`net.cpp`), sleep (`power.cpp`)
 

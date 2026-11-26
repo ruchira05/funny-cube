@@ -31,8 +31,9 @@ String key(int i, const char* field) { return "n" + String(i) + "_" + field; }
 
 // The stored touch baseline is only valid for the same electrical conditions.
 // Version 2: measured with the speaker's I2S clock running (Stage 4), which raises
-// the reading. An older baseline is dropped and measured again at the next boot.
-constexpr uint8_t TOUCH_BASELINE_VERSION = 2;
+// the reading. Version 3: new touch strip (2026-11-26). An older baseline is
+// dropped and measured again at the next boot.
+constexpr uint8_t TOUCH_BASELINE_VERSION = 3;
 
 const ReminderSlot DEFAULT_REMINDERS[REMINDER_COUNT] = {
     {1, 60},  // water every hour

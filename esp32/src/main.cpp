@@ -95,7 +95,7 @@ Gesture readBootGesture(bool freshTouchOnly) {
 
   Serial.println("[boot] touch held at start");
   display.on();
-  display.setRotation(0);
+  display.setRotation(DISPLAY_UPRIGHT_ROTATION);
   uint32_t t0 = millis();
   while (!touch.rawReleased()) {
     uint32_t held = millis() - t0;
@@ -119,7 +119,7 @@ Gesture readBootGesture(bool freshTouchOnly) {
 
 void enterSetup() {
   display.on();
-  display.setRotation(0);
+  display.setRotation(DISPLAY_UPRIGHT_ROTATION);
   portal.start();
   state = State::Setup;
   setupScreen = SetupScreen::JoinQR;

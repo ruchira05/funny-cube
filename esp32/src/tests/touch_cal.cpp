@@ -32,7 +32,7 @@ uint32_t samples[MAX_SAMPLES];
 bool valid(uint32_t v) { return v > 0 && v < 0x3FFFFF; }
 
 struct Stat {
-  uint32_t mean = 0, min = 0, max = 0, p10 = 0, p90 = 0;
+  uint32_t mean = 0, min = 0, max = 0, p10 = 0, p50 = 0, p90 = 0;
   int n = 0;
 };
 
@@ -47,6 +47,7 @@ Stat stats(int n) {
   s.min = samples[0];
   s.max = samples[n - 1];
   s.p10 = samples[n / 10];
+  s.p50 = samples[n / 2];
   s.p90 = samples[n * 9 / 10];
   return s;
 }
@@ -147,11 +148,12 @@ void calibrate() {
   float noise = std::max(ratio(idle.max, idle.mean), ratio(idleMic.max, idleMic.mean));
   float gripR = ratio(grip.p90, idle.mean);
   float notTouch = std::max(noise, gripR);  // highest reading without a finger
-  // p10 of the hold: ignores the moments the finger was still landing.
-  float fingOff = ratio(touchS.p10, idle.mean);
-  float fingOn = ratio(touchMic.p10, idleMic.mean);
+  // Median of the hold: ignores the moments before the finger landed (a late
+  // touch can fill the bottom 10% with untouched readings).
+  float fingOff = ratio(touchS.p50, idle.mean);
+  float fingOn = ratio(touchMic.p50, idleMic.mean);
   float micShift = ratio(idleMic.mean, idle.mean);
-  float fingMicOld = ratio(touchMic.p10, idle.mean);  // finger vs the pre-mic baseline
+  float fingMicOld = ratio(touchMic.p50, idle.mean);  // finger vs the pre-mic baseline
   // A finger step that reads like hands-off: either nobody touched, or the
   // sensor can't see a finger in that condition. Leave it out of the result.
   bool offSeen = fingOff > noise + 0.01f, onSeen = fingOn > noise + 0.01f;
@@ -286,7 +288,7 @@ void setup() {
 
   display.begin();
   display.on();
-  display.setRotation(0);
+  display.setRotation(DISPLAY_UPRIGHT_ROTATION);
   calibrate();
 }
 

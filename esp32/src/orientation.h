@@ -5,13 +5,14 @@
 
 // The resting positions. Rn = the U8g2 display rotation (R0..R3) that reads
 // upright when the cube stands on that face, so a face also tells the screen
-// how to rotate. Back = off: lying on the back (screen up) or on the screen.
-enum class Face : uint8_t { Back = 0, R0, R1, R2, R3, Unknown = 255 };
-constexpr int FACE_COUNT = 5;
-// Directions checked: the 5 faces plus "screen down", which also counts as Back (off).
-// Set in config.h (FACE_DIR_*).
-constexpr int REF_COUNT = FACE_COUNT + 1;
-constexpr int REF_SCREEN_DOWN = FACE_COUNT;
+// how to rotate. Back: lying on the back, screen up, speaker down (radio).
+// ScreenDown: lying on the screen (off).
+enum class Face : uint8_t { Back = 0, R0, R1, R2, R3, ScreenDown, Unknown = 255 };
+constexpr int FACE_COUNT = 6;
+// One direction per face, in the same order. Set in config.h (FACE_DIR_*).
+constexpr int REF_COUNT = FACE_COUNT;
+constexpr int REF_SCREEN_DOWN = (int)Face::ScreenDown;
+inline bool isSideFace(Face f) { return f >= Face::R0 && f <= Face::R3; }
 const char* faceName(Face f);
 
 class Orientation {
@@ -25,7 +26,7 @@ class Orientation {
   // Sample until a steady face is found (or timeout). Used right after boot or wake.
   Face waitForFace(uint32_t timeoutMs);
 
-  // Before deep sleep: interrupt on INT1 when the cube tilts away from the back face.
+  // Before deep sleep: interrupt on INT1 when the cube tilts away from the face it lies on.
   void armMotionWake();
 
  private:

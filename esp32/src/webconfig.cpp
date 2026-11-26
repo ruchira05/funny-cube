@@ -6,6 +6,7 @@
 #include "alarms.h"
 #include "config.h"
 #include "net.h"
+#include "radio.h"
 #include "settings.h"
 #include "speaker.h"
 #include "wifi_setup.h"
@@ -25,7 +26,35 @@ const char* EXTRA_STYLE = R"HTML(<style>
 .alarm{border-top:1px solid #8883;padding-top:10px;margin-top:10px}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 button.alt{background:#52525b}
-</style>)HTML";
+.st{border-top:1px solid #8883;padding-top:8px;margin-top:8px}
+.st input{margin-top:4px}
+.sb{display:flex;gap:6px;margin-top:6px}
+.sb button{width:auto;margin:0;padding:6px 12px;font-size:14px;background:#52525b}
+.sb button.play{background:#16a34a;margin-left:auto}
+</style>
+<script>
+function mv(b,d){var r=b.closest('.st'),p=r.parentNode;
+if(d<0&&r.previousElementSibling)p.insertBefore(r,r.previousElementSibling);
+if(d>0&&r.nextElementSibling)p.insertBefore(r.nextElementSibling,r);}
+function del(b){b.closest('.st').remove();}
+function add(){var l=document.getElementById('st');
+if(l.children.length>=%MAX%){alert('Up to %MAX% stations');return;}
+l.appendChild(document.getElementById('tpl').content.cloneNode(true));}
+</script>)HTML";
+
+// One station row. index >= 0: a saved station (gets a Play button).
+String stationRow(const String& name, const String& url, int index) {
+  String h = "<div class='st'><input name='sn' maxlength='" + String(RADIO_NAME_MAX) +
+             "' placeholder='Name' value='" + name + "'>";
+  h += "<input name='su' type='url' maxlength='" + String(RADIO_URL_MAX) +
+       "' placeholder='http://... stream URL' value='" + url + "'>";
+  h += "<div class='sb'><button type='button' onclick='mv(this,-1)'>&uarr;</button>"
+       "<button type='button' onclick='mv(this,1)'>&darr;</button>"
+       "<button type='button' onclick='del(this)'>Delete</button>";
+  if (index >= 0)
+    h += "<button class='play' formaction='/radio/play?i=" + String(index) + "'>Play</button>";
+  return h + "</div></div>";
+}
 
 String esc(const String& in) {
   String out;
@@ -55,14 +84,20 @@ void redirectHome(const char* msg) {
 
 String pageHtml() {
   String h;
-  h.reserve(9000);
+  h.reserve(16000);
   h += pageHead("Key Cube settings");
-  h += EXTRA_STYLE;
+  String style = EXTRA_STYLE;
+  style.replace("%MAX%", String(RADIO_MAX_STATIONS));
+  h += style;
   h += "<h1>Key Cube</h1>";
   String m = web.arg("m");
   if (m == "saved") h += "<div class='card'>Saved.</div>";
   else if (m == "test") h += "<div class='card'>Playing a test sound.</div>";
   else if (m == "ring") h += "<div class='card'>Test alarm ringing. Tap the cube to snooze, hold to stop.</div>";
+  else if (m == "radio") h += "<div class='card'>Radio saved.</div>";
+  else if (m == "rreset") h += "<div class='card'>Radio stations reset to the default list.</div>";
+  else if (m == "rplay") h += "<div class='card'>" + String(radioMode.active() ? "Playing on the cube." : "Selected. It plays when the cube lies on its back.") + "</div>";
+  else if (m == "busy") h += "<div class='card'>The radio is playing: no test sound. Turn the cube to another side first.</div>";
 
   // Clock.
   h += "<div class='card'><h2>Clock</h2>";
@@ -122,7 +157,7 @@ String pageHtml() {
   h += "<div><label>To (hour)</label><input type='number' min='0' max='23' name='rto' value='" +
        String(settings.remindTo()) + "'></div></div>";
   h += "<div class='small'>Reminders only fire between these hours, and not while the cube "
-       "lies on its back (off). Same hour twice: all day.</div></div>";
+       "lies on its screen (off). Same hour twice: all day.</div></div>";
 
   // Focus timer.
   h += "<div class='card'><h2>Focus timer</h2><div class='grid'>";
@@ -144,6 +179,35 @@ String pageHtml() {
   h += "<button type='submit'>Save</button></form>";
   h += "<form method='post' action='/test'><button class='alt'>Play test sound</button></form>";
   h += "<form method='post' action='/ring'><button class='alt'>Ring a test alarm</button></form>";
+
+  // Radio (its own form: the station list can be long).
+  h += "<div class='card'><h2>Radio</h2><div class='small'>Plays when the cube lies on its "
+       "back (speaker down, screen up). Tap: next station. Hold: pause.</div>";
+  h += "<form method='post' action='/radio'><div id='st'>";
+  const auto& list = settings.stations();
+  for (size_t i = 0; i < list.size(); i++) h += stationRow(esc(list[i].name), esc(list[i].url), i);
+  h += "</div><template id='tpl'>" + stationRow("", "", -1) + "</template>";
+  h += "<button type='button' class='alt' onclick='add()'>Add station</button>";
+  h += "<div class='small'>Up to " + String(RADIO_MAX_STATIONS) +
+       " stations. MP3 and AAC streams (http:// is lighter than https://). "
+       "Play uses the saved list.</div>";
+  h += "<label>Radio volume <span id='rv'>" + String(settings.radioVolume()) +
+       "</span></label><input type='range' min='0' max='100' name='rvol' value='" +
+       String(settings.radioVolume()) + "' oninput='rv.textContent=this.value'>";
+  h += "<label>Sleep timer</label><select name='rsleep'>";
+  static const uint8_t SLEEP_OPTIONS[] = {0, 15, 30, 45, 60, 90, 120};
+  for (uint8_t m : SLEEP_OPTIONS) {
+    h += "<option value='" + String(m) + "'" + (settings.radioSleepMin() == m ? " selected" : "") +
+         ">" + (m ? String(m) + " min" : String("Off")) + "</option>";
+  }
+  h += "</select><div class='small'>Stops the radio this long after it starts and shows the "
+       "clock. A touch plays again.</div>";
+  h += "<label class='chk'><input type='checkbox' name='rrem'" + checked(settings.radioReminders()) +
+       "> Health reminders interrupt the radio</label>";
+  h += "<button type='submit'>Save radio</button></form>";
+  h += "<form method='post' action='/radio/reset' onsubmit=\"return confirm('Replace the "
+       "station list with the default stations?')\"><button class='alt'>Reset to the default "
+       "stations</button></form></div>";
   h += "<p class='small'>" + esc(settings.apName()) + " · firmware " FW_VERSION "</p></body></html>";
   return h;
 }
@@ -186,14 +250,48 @@ void handleSave() {
   Serial.println("[web] settings saved");
   redirectHome("saved");
 }
+
+void handleRadioSave() {
+  // Rows arrive as sn/su pairs in page order (moved and deleted on the page).
+  std::vector<RadioStation> list;
+  String name;
+  for (int i = 0; i < web.args(); i++) {
+    if (web.argName(i) == "sn") name = web.arg(i);
+    else if (web.argName(i) == "su") {
+      if (!web.arg(i).isEmpty()) list.push_back({name, web.arg(i)});
+      name = "";
+    }
+  }
+  settings.setStations(list);
+  settings.setRadioVolume(argInt("rvol", settings.radioVolume(), 0, 100));
+  settings.setRadioSleepMin(argInt("rsleep", settings.radioSleepMin(), 0, 240));
+  settings.setRadioReminders(web.hasArg("rrem"));
+  radioMode.stationsChanged();
+  Serial.printf("[web] radio saved: %u stations\n", (unsigned)settings.stations().size());
+  redirectHome("radio");
+}
 }  // namespace
 
 void WebConfig::begin() {
   web.on("/", HTTP_GET, []() { web.send(200, "text/html", pageHtml()); });
   web.on("/save", HTTP_POST, handleSave);
   web.on("/test", HTTP_POST, []() {
+    if (speaker.released()) {  // the radio has the speaker
+      redirectHome("busy");
+      return;
+    }
     speaker.play(Sound::Chime);
     redirectHome("test");
+  });
+  web.on("/radio", HTTP_POST, handleRadioSave);
+  web.on("/radio/play", HTTP_POST, []() {
+    radioMode.playIndex(argInt("i", -1, -1, RADIO_MAX_STATIONS));
+    redirectHome("rplay");
+  });
+  web.on("/radio/reset", HTTP_POST, []() {
+    settings.resetStations();
+    radioMode.stationsChanged();
+    redirectHome("rreset");
   });
   web.on("/ring", HTTP_POST, []() {
     alerts.startAlarm(-1);  // modes.cpp sees the alert start on its next loop

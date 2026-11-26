@@ -1,6 +1,6 @@
 #include "keybuddy.h"
 
-#include "audio.h"
+#include "mic.h"
 #include "config.h"
 #include "display.h"
 #include "net.h"

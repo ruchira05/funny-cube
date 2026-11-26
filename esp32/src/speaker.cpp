@@ -67,12 +67,7 @@ bool Speaker::begin() {
   for (int i = 0; i < TABLE_SIZE; i++)
     sineTable[i] = (int16_t)lrintf(32767.0f * sinf(2.0f * (float)M_PI * i / TABLE_SIZE));
 
-  i2s.setPins(PIN_SPK_BCLK, PIN_SPK_LRC, PIN_SPK_DIN, -1);
-  i2s.setTimeout(200);
-  // 16-bit stereo, the same sample in both slots: the amp plays left, right or the
-  // mix depending on its SD voltage, and all three are the same sound.
-  if (!i2s.begin(I2S_MODE_STD, SPK_SAMPLE_RATE, I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO,
-                 I2S_STD_SLOT_BOTH)) {
+  if (!openI2S()) {
     Serial.println("[spk] I2S start failed: no sound");
     return false;
   }
@@ -84,6 +79,45 @@ bool Speaker::begin() {
   ok_ = true;
   Serial.printf("[spk] ready, volume %u\n", settings.volume());
   return true;
+}
+
+bool Speaker::openI2S() {
+  i2s.setPins(PIN_SPK_BCLK, PIN_SPK_LRC, PIN_SPK_DIN, -1);
+  i2s.setTimeout(200);
+  // 16-bit stereo, the same sample in both slots: the amp plays left, right or the
+  // mix depending on its SD voltage, and all three are the same sound.
+  return i2s.begin(I2S_MODE_STD, SPK_SAMPLE_RATE, I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO,
+                   I2S_STD_SLOT_BOTH);
+}
+
+void Speaker::release() {
+  if (!ok_ || released_) return;
+  portENTER_CRITICAL(&mux_);
+  released_ = true;
+  req_ = Sound::None;
+  repeat_ = false;
+  seq_ = seq_ + 1;  // interrupts a sound that is playing
+  portEXIT_CRITICAL(&mux_);
+  xTaskNotifyGive(task_);
+  for (int i = 0; i < 50 && busy_; i++) delay(10);  // the task fades out and turns the amp off
+  i2s.end();
+  playing_ = false;
+  Serial.println("[spk] I2S handed to the radio");
+}
+
+void Speaker::reclaim() {
+  if (!ok_ || !released_) return;
+  digitalWrite(PIN_SPK_SD, LOW);
+  if (!openI2S()) Serial.println("[spk] I2S restart failed: no sound");
+  portENTER_CRITICAL(&mux_);
+  released_ = false;
+  // An alarm (repeat) always plays; a one-off sound only if it is recent.
+  bool pending = req_ != Sound::None && (repeat_ || millis() - reqAt_ < 3000);
+  if (!pending) req_ = Sound::None;
+  playing_ = pending;
+  portEXIT_CRITICAL(&mux_);
+  if (pending) xTaskNotifyGive(task_);
+  Serial.println("[spk] I2S back from the radio");
 }
 
 void Speaker::play(Sound s, bool repeat) {
@@ -100,9 +134,11 @@ void Speaker::play(Sound s, bool repeat) {
   req_ = s;
   repeat_ = repeat;
   seq_ = seq_ + 1;
-  playing_ = true;
+  reqAt_ = millis();
+  bool held = released_;  // the radio has the pins: reclaim() starts it
+  playing_ = !held;
   portEXIT_CRITICAL(&mux_);
-  xTaskNotifyGive(task_);
+  if (!held) xTaskNotifyGive(task_);
 }
 
 void Speaker::stop() {
@@ -116,6 +152,9 @@ void Speaker::stop() {
 }
 
 void Speaker::shutdown() {
+  if (released_) {  // the radio still has the pins (normally stopped before this)
+    digitalWrite(PIN_SPK_SD, LOW);
+  }
   stop();
   for (int i = 0; i < 30 && playing_; i++) delay(10);
   gpio_num_t sd = (gpio_num_t)PIN_SPK_SD;
@@ -139,13 +178,14 @@ void Speaker::taskLoop() {
   for (;;) {
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
     bool ampOn = false;
+    busy_ = true;
     for (;;) {
       portENTER_CRITICAL(&mux_);
       uint32_t seq = seq_;
-      Sound s = req_;
+      Sound s = released_ ? Sound::None : req_;
       bool repeat = repeat_;
       float gain = gain_;
-      if (s == Sound::None) playing_ = false;
+      if (s == Sound::None && !released_) playing_ = false;
       portEXIT_CRITICAL(&mux_);
       if (s == Sound::None) break;
 
@@ -178,6 +218,7 @@ void Speaker::taskLoop() {
       silence(40);  // the DMA buffers hold silence before the amp turns off
       amp(false);
     }
+    busy_ = false;
   }
 }
 

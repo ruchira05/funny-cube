@@ -30,6 +30,12 @@ struct ReminderSlot {
   uint16_t everyMin;
 };
 
+// Internet radio station (back face).
+struct RadioStation {
+  String name;
+  String url;
+};
+
 class Settings {
  public:
   void begin();
@@ -84,6 +90,20 @@ class Settings {
   uint8_t volume() const { return volume_; }  // 0..100
   void setVolume(uint8_t v);
 
+  // ---- Internet radio ----
+  // Up to RADIO_MAX_STATIONS. The first boot (or a reset) loads the default list.
+  const std::vector<RadioStation>& stations() const { return stations_; }
+  void setStations(const std::vector<RadioStation>& list);  // cleaned and saved
+  void resetStations();  // back to the default list
+  uint8_t radioStation() const { return radioStation_; }  // last played, index
+  void setRadioStation(uint8_t i);
+  uint8_t radioVolume() const { return radioVolume_; }  // 0..100
+  void setRadioVolume(uint8_t v);
+  uint8_t radioSleepMin() const { return radioSleepMin_; }  // 0 = no sleep timer
+  void setRadioSleepMin(uint8_t m);
+  bool radioReminders() const { return radioRem_; }  // health reminders interrupt the radio
+  void setRadioReminders(bool on);
+
   // Wipe everything (networks, server settings, hotspot password, touch baseline).
   void factoryReset();
 
@@ -107,6 +127,12 @@ class Settings {
   uint8_t focusWork_ = DEFAULT_FOCUS_WORK_MIN, focusBreak_ = DEFAULT_FOCUS_BREAK_MIN,
           focusLong_ = DEFAULT_FOCUS_LONG_MIN;
   uint8_t volume_ = SPK_DEFAULT_VOLUME;
+
+  void loadStations();
+  void saveStations();
+  std::vector<RadioStation> stations_;
+  uint8_t radioStation_ = 0, radioVolume_ = RADIO_DEFAULT_VOLUME, radioSleepMin_ = 0;
+  bool radioRem_ = true;
 };
 
 extern Settings settings;

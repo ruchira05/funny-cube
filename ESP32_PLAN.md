@@ -90,12 +90,14 @@ esp32/
    ├─ power.cpp/.h       # deep sleep, wake on motion or touch                      (2)
    ├─ faces.cpp/.h       # emotion faces                                            (3)
    ├─ keybuddy.cpp/.h    # mode A: hold to talk, thinking, reply pages              (3)
-   ├─ audio.cpp/.h       # I2S mic, record to PSRAM                                 (3)
+   ├─ mic.cpp/.h         # I2S mic, record to PSRAM                                 (3)
    ├─ speaker.cpp/.h     # I2S output to the MAX98357A: tones and beeps             (4)
    ├─ alarms.cpp/.h      # NTP time, alarm and reminder schedule, alert screens     (4)
    ├─ clockmodes.cpp/.h  # mode B (alarm) and mode C (health reminders) screens     (4)
    ├─ focus.cpp/.h       # mode D: focus timer and large clock                      (4)
-   └─ webconfig.cpp/.h   # settings page at http://keycube.local                    (4)
+   ├─ webconfig.cpp/.h   # settings page at http://keycube.local                    (4)
+   ├─ radio.cpp/.h       # internet radio: stream player task and the radio mode    (radio)
+   └─ radioscreen.cpp/.h # radio screens and animations                             (radio)
 ```
 
 ---
@@ -233,8 +235,7 @@ Never show saved WiFi passwords or the API key on the display.
 
 ### 2.1 Layout
 
-- The OLED is on the **front** face. The **off face is the back** (opposite the screen).
-- Resting on the off face puts the screen facing up and blank. This is the default idle state.
+- The OLED is on the **front** face. Since the radio was added, the **off face is the screen** (lying face down); the back (speaker side) plays the radio with the screen facing up. Originally the back was the off face.
 - Standing the cube on any of the other 4 faces selects a mode. The screen then faces sideways, toward you.
 - An accelerometer measures tilt, not spin around the vertical axis. This layout works because each of the 5 positions puts gravity on a different axis.
 
@@ -242,7 +243,8 @@ Each side face is named by the display rotation that reads upright on it (R0–R
 
 | Face down | Face name | Mode (to confirm) | Screen |
 |---|---|---|---|
-| Back (off face) | `Back` | **Off:** screen blank, deep sleep | off |
+| Back (speaker down, screen up) | `Back` | **Radio** (see `RADIO_PLAN.md`) | 128 × 64 |
+| Screen down (off face) | `ScreenDown` | **Off:** screen blank, deep sleep | off |
 | Side, portrait | `R1` | **A: Key buddy** (Stage 3) | 64 × 128 |
 | Side, portrait, flipped | `R3` | **B: Alarm** (Stage 4) | 64 × 128 |
 | Bottom edge | `R0` | **C: Health reminders** (Stage 4) | 128 × 64 |
@@ -271,7 +273,7 @@ The listing gives no pin names, so read the silkscreen before wiring. If INT1 is
 
 - `face = orientation.face()` maps to a mode. Each mode has `enter()`, `loop()` and `exit()`. In this stage, modes A–D show their name, an icon and a status line (Online, No WiFi, ...). A tap shows WiFi and server status for 6 s and re-checks `/health`.
 - `/health` runs in a background FreeRTOS task, and WiFi reconnects without blocking, so the screen never freezes waiting for the network.
-- **Off mode:** blank the screen; after 3 s turn WiFi off and enter deep sleep. Wake on MMA8452 motion (INT1 → GPIO 10, tilt about 0.25 g past rest) or touch (GPIO 4). On wake: read the face. If it's still the back face, sleep again without WiFi. Otherwise show the mode at once and reconnect WiFi in the background.
+- **Off mode** (now lying on the screen; see the radio note in 2.1): blank the screen; after 3 s turn WiFi off and enter deep sleep. Wake on MMA8452 motion (INT1 → GPIO 10, tilt about 0.25 g past rest) or touch (GPIO 4). On wake: read the face. If it's still the back face, sleep again without WiFi. Otherwise show the mode at once and reconnect WiFi in the background.
 - The Stage 1 setup gesture works at power-on (fresh touch within 2 s of the boot screen, held 3 s / 10 s) and after a touch wake (keep holding the strip). A tilt wake skips it.
 - DEV-ONLY `DEV_NO_SLEEP_ON_USB`: while a computer is connected over USB, the off face blanks the screen but stays awake, so upload and the serial monitor keep working.
 
@@ -320,7 +322,7 @@ IDLE ──(touch)──► RECORDING ──(release or 10 s)──► UPLOADING
 | SHOW_REPLY | Emotion face for about 2 s, then the reply text |
 | SHOW_ERROR | Short message (WiFi down, 401, 502, timeout) |
 
-### 3.3 Audio (`audio.cpp`)
+### 3.3 Audio (`mic.cpp`)
 
 - I2S RX at 16 kHz, 32-bit samples, left channel. The INMP441 outputs 24 bits left-aligned in 32: convert with `sample >> 14` (try `>> 11` if quiet), then clip to int16.
 - The mic runs (in its own FreeRTOS task) only while mode A is active, so recording starts instantly on touch. The first 200 ms after it starts are dropped (mic settle). A DC blocker removes the INMP441 offset. `MIC_SHIFT` in `config.h` sets the gain.

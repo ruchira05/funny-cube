@@ -7,7 +7,8 @@
 // Schedule: up to MAX_ALARMS alarms (once, or on chosen weekdays) and 3 health
 // reminders (water, stretch, posture) that repeat every N minutes within active
 // hours. Alarms ring in every mode and wake the cube from deep sleep; reminders
-// fire in the 4 side modes only (the off face means off).
+// fire in the 4 side modes and the radio (unless switched off for the radio on
+// the settings page), never on the off face (lying on the screen).
 //
 // Alerts: a full-screen overlay on top of any mode while an alarm rings or a
 // reminder or notice shows. Modes (modes.cpp) pauses the mode underneath.

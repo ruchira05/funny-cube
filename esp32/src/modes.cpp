@@ -8,6 +8,8 @@
 #include "keybuddy.h"
 #include "net.h"
 #include "power.h"
+#include "radio.h"
+#include "settings.h"
 #include "speaker.h"
 #include "touch.h"
 
@@ -24,14 +26,20 @@ struct ModeInfo {
 // Face-to-mode table: which mode runs on which face. To swap two modes, swap
 // their rows' first four fields, and keep the row order (it follows Face).
 // The screen rotation comes from the face, not the mode: R1/R3 are portrait,
-// R0/R2 landscape. Face directions are set in config.h (FACE_DIR_*).
+// R0/R2 landscape, the back face uses DISPLAY_UPRIGHT_ROTATION. Face directions
+// are set in config.h (FACE_DIR_*).
 const ModeInfo MODE_FOR_FACE[FACE_COUNT] = {
-    {Mode::Off, "Off", "", Display::Icon::Buddy},                   // Face::Back (+ screen down)
+    {Mode::Radio, "Radio", "", Display::Icon::Buddy},               // Face::Back (speaker down)
     {Mode::Health, "Health", "Mode C", Display::Icon::Health},      // Face::R0 landscape
     {Mode::KeyBuddy, "Key buddy", "Mode A", Display::Icon::Buddy},  // Face::R1 portrait
     {Mode::Focus, "Focus", "Mode D", Display::Icon::Focus},         // Face::R2 landscape
     {Mode::Alarm, "Alarm", "Mode B", Display::Icon::Alarm},         // Face::R3 portrait
+    {Mode::Off, "Off", "", Display::Icon::Buddy},                   // Face::ScreenDown
 };
+
+uint8_t rotationFor(Face f) {
+  return isSideFace(f) ? (uint8_t)f - (uint8_t)Face::R0 : DISPLAY_UPRIGHT_ROTATION;
+}
 
 const char* modeName(Mode m) {
   for (const auto& i : MODE_FOR_FACE)
@@ -79,13 +87,14 @@ void Modes::enter(Mode m, Face f) {
     return;
   }
   display.on();
-  display.setRotation((uint8_t)f - (uint8_t)Face::R0);  // R0..R3 -> 0..3
+  display.setRotation(rotationFor(f));
   dirty_ = true;
   switch (m) {
     case Mode::KeyBuddy: keyBuddy.enter(); break;   // Stage 3
     case Mode::Alarm: alarmMode.enter(); break;     // Stage 4
     case Mode::Health: healthMode.enter(); break;   // Stage 4
     case Mode::Focus: focusMode.enter(); break;     // Stage 4
+    case Mode::Radio: radioMode.enter(); break;
     default: break;
   }
 }
@@ -93,13 +102,15 @@ void Modes::enter(Mode m, Face f) {
 void Modes::exit(Mode m) {
   // Modes stop recording here. The focus timer keeps running on other faces.
   if (m == Mode::KeyBuddy) keyBuddy.exit();
+  if (m == Mode::Radio) radioMode.exit();  // stream stops, the speaker gets its pins back
 }
 
 void Modes::loop() {
   // ---- Stage 4: schedule, focus timer and alerts, in every mode ----
   bool busy = mode_ == Mode::KeyBuddy && keyBuddy.busy();
-  bool offFace = mode_ == Mode::Off || (inAlert_ && face_ == Face::Back);
-  schedule.loop(offFace, busy);
+  bool offFace = mode_ == Mode::Off || (inAlert_ && face_ == Face::ScreenDown);
+  bool noReminders = offFace || (mode_ == Mode::Radio && !settings.radioReminders());
+  schedule.loop(noReminders, busy);
   focus.tick();
   if (!alerts.active() && !busy && !offFace && mode_ != Mode::Focus) {
     String title, body;
@@ -109,13 +120,14 @@ void Modes::loop() {
 
   if (alerts.consumeStarted()) {
     // Pause the mode underneath (key buddy stops the mic: no recording of the
-    // speaker). Lying on the back, the screen faces up: draw it upright (DISPLAY_UPRIGHT_ROTATION).
+    // speaker; the radio stops and hands the speaker back for the alert sound).
+    // Not on a side: draw it upright (DISPLAY_UPRIGHT_ROTATION).
     Serial.printf("[mode] alert over %s\n", modeName(mode_));
     exit(mode_);
     mode_ = Mode::None;
     inAlert_ = true;
     display.on();
-    if (face_ == Face::Back || face_ == Face::Unknown) display.setRotation(DISPLAY_UPRIGHT_ROTATION);
+    if (!isSideFace(face_)) display.setRotation(DISPLAY_UPRIGHT_ROTATION);
   }
 
   if (orientation.present() && orientation.consumeFaceChange()) {
@@ -125,7 +137,7 @@ void Modes::loop() {
     } else if (f != Face::Unknown && f != face_) {
       // Picked up while ringing: keep the alert, turn the screen to face the user.
       face_ = f;
-      if (f != Face::Back) display.setRotation((uint8_t)f - (uint8_t)Face::R0);
+      display.setRotation(rotationFor(f));
       alerts.redraw();
     }
   }
@@ -180,6 +192,7 @@ void Modes::loop() {
     case Mode::Alarm: alarmMode.loop(); return;
     case Mode::Health: healthMode.loop(); return;
     case Mode::Focus: focusMode.loop(); return;
+    case Mode::Radio: radioMode.loop(); return;
     default: break;
   }
 

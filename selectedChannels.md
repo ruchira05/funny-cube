@@ -1,0 +1,15 @@
+https://radio.lotustechnologieslk.net:2020/stream/goldfmgarden
+http://ice1.somafm.com/indiepop-128-mp3
+http://ice1.somafm.com/dronezone-128-mp3
+http://ice1.somafm.com/secretagent-128-mp3
+http://ice1.somafm.com/deepspaceone-128-mp3
+http://stream.radioparadise.com/mp3-128
+https://icecast.radiofrance.fr/fip-midfi.mp3
+https://stream.live.vc.bbcmedia.co.uk/bbc_world_service
+http://fm939.wnyc.org/wnycfm
+https://srv02.onlineradio.voaplus.com/kissfm
+https://radio.lotustechnologieslk.net:2020/stream/sunfmgarden
+https://radio.lotustechnologieslk.net:2020/stream/goldfmgarden
+https://radio.lotustechnologieslk.net:8000/
+http://live.trusl.com:1150/
+https://mbc.thestreamtech.com:8585/stream

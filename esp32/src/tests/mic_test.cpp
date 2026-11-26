@@ -17,7 +17,7 @@
 #include <Arduino.h>
 #include <math.h>
 
-#include "../audio.h"
+#include "../mic.h"
 #include "../config.h"
 #include "../display.h"
 

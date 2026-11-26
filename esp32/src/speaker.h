@@ -27,6 +27,13 @@ class Speaker {
   // Before deep sleep: stop, amp off and held off while asleep.
   void shutdown();
 
+  // Hand the I2S pins to the radio: stop, wait for the player task, close I2S.
+  // While released, play() keeps only the latest request, and reclaim() plays it
+  // if it is recent (an alarm that starts the moment the radio stops).
+  void release();
+  void reclaim();  // reopen I2S at 16 kHz (the clock runs again)
+  bool released() const { return released_; }
+
  private:
   static void taskEntry(void* arg);
   void taskLoop();
@@ -35,7 +42,10 @@ class Speaker {
   void silence(uint16_t ms);
   void amp(bool on);
 
+  bool openI2S();
   bool ok_ = false;
+  volatile bool released_ = false, busy_ = false;
+  volatile uint32_t reqAt_ = 0;
   TaskHandle_t task_ = nullptr;
   portMUX_TYPE mux_ = portMUX_INITIALIZER_UNLOCKED;
   volatile Sound req_ = Sound::None;

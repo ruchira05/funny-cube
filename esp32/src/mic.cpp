@@ -1,4 +1,4 @@
-#include "audio.h"
+#include "mic.h"
 
 #include <ESP_I2S.h>
 #include <math.h>
@@ -78,7 +78,9 @@ void Mic::taskEntry(void* arg) {
 void Mic::taskLoop() {
   int32_t raw[CHUNK];
   float prevIn = 0, prevOut = 0;  // DC blocker state
+#if AUDIO_DEBUG
   uint32_t lastLog = 0;
+#endif
   while (running_) {
     size_t got = i2s.readBytes((char*)raw, sizeof(raw)) / sizeof(int32_t);
     if (got == 0) continue;

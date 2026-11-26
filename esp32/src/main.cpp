@@ -272,7 +272,7 @@ void setup() {
     // Bumped or tapped while lying on the off face: go straight back to sleep
     // without turning on WiFi or the screen. Unless an alarm is close (the timer
     // wake): then stay up, re-sync the time over WiFi, and ring.
-    if (orientation.waitForFace(WAKE_FACE_TIMEOUT_MS) == Face::Back &&
+    if (orientation.waitForFace(WAKE_FACE_TIMEOUT_MS) == Face::ScreenDown &&
         !schedule.alarmSoon(ALARM_PREWAKE_S)) {
       Serial.println("[wake] still on the off face");
       goToSleep();

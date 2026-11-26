@@ -1,5 +1,6 @@
 #include "settings.h"
 
+#include <ArduinoJson.h>
 #include <esp_random.h>
 
 #include "config.h"
@@ -42,6 +43,42 @@ const ReminderSlot DEFAULT_REMINDERS[REMINDER_COUNT] = {
 };
 
 uint8_t clampU8(int v, int lo, int hi) { return (uint8_t)(v < lo ? lo : v > hi ? hi : v); }
+
+// Default radio stations (selectedChannels.md). Yes FM uses /stream: its server
+// answers "/" with a web page. SomaFM uses its 64 kbps AAC streams: the US
+// servers are far away, and the 128 kbps MP3 versions stuttered.
+const RadioStation DEFAULT_STATIONS[] = {
+    {"Gold FM", "https://radio.lotustechnologieslk.net:2020/stream/goldfmgarden"},
+    {"SomaFM Indie Pop", "http://ice1.somafm.com/indiepop-64-aac"},
+    {"SomaFM Drone Zone", "http://ice1.somafm.com/dronezone-64-aac"},
+    {"SomaFM Secret Agent", "http://ice1.somafm.com/secretagent-64-aac"},
+    {"SomaFM Deep Space", "http://ice1.somafm.com/deepspaceone-64-aac"},
+    {"Radio Paradise", "http://stream.radioparadise.com/mp3-128"},
+    {"FIP", "https://icecast.radiofrance.fr/fip-midfi.mp3"},
+    {"BBC World Service", "https://stream.live.vc.bbcmedia.co.uk/bbc_world_service"},
+    {"WNYC", "http://fm939.wnyc.org/wnycfm"},
+    {"Kiss FM", "https://srv02.onlineradio.voaplus.com/kissfm"},
+    {"Sun FM", "https://radio.lotustechnologieslk.net:2020/stream/sunfmgarden"},
+    {"Gold FM (backup)", "https://radio.lotustechnologieslk.net:8000/"},
+    {"Yes FM", "http://live.trusl.com:1150/stream"},
+    {"Legends 96.6", "https://mbc.thestreamtech.com:8585/stream"},
+};
+
+// Trimmed and length-limited; empty if the URL isn't http(s).
+RadioStation cleanStation(RadioStation st) {
+  st.name.trim();
+  st.url.trim();
+  if (!(st.url.startsWith("http://") || st.url.startsWith("https://")) ||
+      st.url.length() > RADIO_URL_MAX)
+    return {"", ""};
+  if (st.name.isEmpty()) {  // fall back to the host name
+    int a = st.url.indexOf("//") + 2, b = st.url.indexOf('/', a), c = st.url.indexOf(':', a);
+    if (c > 0 && (b < 0 || c < b)) b = c;
+    st.name = st.url.substring(a, b < 0 ? st.url.length() : b);
+  }
+  if (st.name.length() > RADIO_NAME_MAX) st.name = st.name.substring(0, RADIO_NAME_MAX);
+  return st;
+}
 }  // namespace
 
 void Settings::begin() {
@@ -83,6 +120,94 @@ void Settings::load() {
   volume_ = prefs_.getUChar("vol", SPK_DEFAULT_VOLUME);
   seq_ = prefs_.getUInt("seq", 0);
   loadNetworks();
+
+  radioVolume_ = prefs_.getUChar("rvol", RADIO_DEFAULT_VOLUME);
+  radioSleepMin_ = prefs_.getUChar("rsleep", 0);
+  radioRem_ = prefs_.getBool("rrem", true);
+  loadStations();
+  radioStation_ = prefs_.getUChar("rlast", 0);
+  if (radioStation_ >= stations_.size()) radioStation_ = 0;
+}
+
+void Settings::loadStations() {
+  stations_.clear();
+  String json = prefs_.getString("rstations", "");
+  if (json.isEmpty()) {  // never saved: the default list
+    for (const auto& st : DEFAULT_STATIONS) stations_.push_back(st);
+    return;
+  }
+  JsonDocument doc;
+  if (deserializeJson(doc, json)) return;  // corrupt: empty list, the page can fix it
+  for (JsonObject o : doc.as<JsonArray>()) {
+    RadioStation st = cleanStation({o["n"] | "", o["u"] | ""});
+    if (!st.url.isEmpty() && stations_.size() < RADIO_MAX_STATIONS) stations_.push_back(st);
+  }
+  // List version 1: saved SomaFM 128 kbps MP3 streams move to 64 kbps AAC (once).
+  if (prefs_.getUChar("rstver", 0) < 1) {
+    bool changed = false;
+    for (auto& st : stations_) {
+      if (st.url.indexOf("somafm.com/") > 0 && st.url.endsWith("-128-mp3")) {
+        st.url = st.url.substring(0, st.url.length() - 8) + "-64-aac";
+        changed = true;
+      }
+    }
+    if (changed) saveStations();
+    prefs_.putUChar("rstver", 1);
+  }
+}
+
+void Settings::saveStations() {
+  JsonDocument doc;
+  JsonArray a = doc.to<JsonArray>();
+  for (const auto& st : stations_) {
+    JsonObject o = a.add<JsonObject>();
+    o["n"] = st.name;
+    o["u"] = st.url;
+  }
+  String json;
+  serializeJson(doc, json);
+  prefs_.putString("rstations", json);
+}
+
+void Settings::setStations(const std::vector<RadioStation>& list) {
+  stations_.clear();
+  for (const auto& in : list) {
+    RadioStation st = cleanStation(in);
+    if (!st.url.isEmpty() && stations_.size() < RADIO_MAX_STATIONS) stations_.push_back(st);
+  }
+  saveStations();
+  if (radioStation_ >= stations_.size()) setRadioStation(0);
+}
+
+void Settings::resetStations() {
+  prefs_.remove("rstations");
+  loadStations();
+  setRadioStation(0);
+}
+
+void Settings::setRadioStation(uint8_t i) {
+  if (i == radioStation_ && prefs_.isKey("rlast")) return;
+  radioStation_ = i;
+  prefs_.putUChar("rlast", i);
+}
+
+void Settings::setRadioVolume(uint8_t v) {
+  if (v > 100) v = 100;
+  if (v == radioVolume_) return;
+  radioVolume_ = v;
+  prefs_.putUChar("rvol", v);
+}
+
+void Settings::setRadioSleepMin(uint8_t m) {
+  if (m == radioSleepMin_) return;
+  radioSleepMin_ = m;
+  prefs_.putUChar("rsleep", m);
+}
+
+void Settings::setRadioReminders(bool on) {
+  if (on == radioRem_) return;
+  radioRem_ = on;
+  prefs_.putBool("rrem", on);
 }
 
 void Settings::loadNetworks() {

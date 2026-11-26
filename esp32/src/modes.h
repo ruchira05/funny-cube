@@ -1,6 +1,7 @@
 // Mode state machine: the face the cube stands on selects the mode.
 // A: key buddy (keybuddy.cpp), B: alarm and C: health (clockmodes.cpp),
-// D: focus timer and clock (focus.cpp). Alarm, reminder and notice alerts
+// D: focus timer and clock (focus.cpp), radio on the back face (radio.cpp),
+// off when lying on the screen. Alarm, reminder and notice alerts
 // (alarms.cpp) show on top of any mode, which pauses underneath.
 #pragma once
 
@@ -8,7 +9,7 @@
 
 #include "orientation.h"
 
-enum class Mode { None, Off, KeyBuddy, Alarm, Health, Focus };
+enum class Mode { None, Off, KeyBuddy, Alarm, Health, Focus, Radio };
 
 class Modes {
  public:

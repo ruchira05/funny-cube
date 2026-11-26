@@ -3,7 +3,7 @@
 // phone setup page and stored in flash (see settings.h).
 #pragma once
 
-#define FW_VERSION "0.4.0-stage4"
+#define FW_VERSION "0.5.0-radio"
 
 // ---- Pins (see ESP32_PLAN.md, pin map) ----
 #define PIN_I2C_SDA 8
@@ -40,7 +40,7 @@
 // OFF stays above the hand for hysteresis.
 #define TOUCH_ON_FACTOR 1.15f
 #define TOUCH_OFF_FACTOR 1.06f
-#define TOUCH_DEBUG 1           // 1: print raw touch values every 500 ms
+#define TOUCH_DEBUG 0           // 1: print raw touch values every 500 ms
 #define TOUCH_SAMPLE_MS 10      // sampling interval
 #define TOUCH_FILTER_SAMPLES 3  // consecutive samples needed to change state
 #define TOUCH_TAP_MAX_MS 800    // a press shorter than this is a "tap"
@@ -101,7 +101,7 @@
 // To fix text that is upside down or sideways on a face, swap the directions of
 // the two faces involved (e.g. R0 <-> R2). Which mode runs on each face is set in
 // modes.cpp (MODE_FOR_FACE).
-#define FACE_DIR_BACK        {-1,  0,  0}  // lying on the back, screen up  -> Off
+#define FACE_DIR_BACK        {-1,  0,  0}  // lying on the back, screen up  -> Radio
 #define FACE_DIR_SCREEN_DOWN { 1,  0,  0}  // lying on the screen           -> Off
 #define FACE_DIR_R0          { 0,  0, -1}  // landscape
 #define FACE_DIR_R1          { 0,  1,  0}  // portrait
@@ -118,7 +118,7 @@
 #define MIC_SAMPLE_RATE 16000
 #define MIC_SHIFT 14            // INMP441 24-bit in 32: >> 14 to int16. Quiet? try 13 or 12
 #define MIC_SETTLE_MS 200       // drop audio for this long after the mic starts
-#define AUDIO_DEBUG 1           // log level, length and peak of each recording
+#define AUDIO_DEBUG 0           // log level, length and peak of each recording
 #define RECORD_MAX_MS 10000     // 10 s cap (320 KB in PSRAM)
 #define RECORD_MIN_MS 300       // shorter press = tap (next page / status), not a recording
 #define RECORD_LOCKOUT_MS 300   // after a recording, ignore touch this long
@@ -159,6 +159,24 @@
 #define DEFAULT_FOCUS_BREAK_MIN 5
 #define DEFAULT_FOCUS_LONG_MIN 15
 #define FOCUS_LONG_EVERY 4           // a long break after every 4 focus periods
+
+// ---- Internet radio (back face: speaker down, screen up) ----
+// Stations are edited on the settings page; the first boot loads the default
+// list in radio.cpp (DEFAULT_STATIONS).
+#define RADIO_MAX_STATIONS 20
+#define RADIO_NAME_MAX 24             // characters
+#define RADIO_URL_MAX 200
+#define RADIO_DEFAULT_VOLUME 50       // 0..100, its own setting (music vs beeps)
+#define RADIO_CONNECT_TIMEOUT_MS 10000  // no audio this long after connecting: retry
+#define RADIO_RETRIES 2               // then show "Station unavailable"
+#define RADIO_RETRY_PAUSE_MS 1500
+#define RADIO_FRAME_MS 60             // screen refresh while animating (about 16 fps)
+#define RADIO_LOW_SHELF_DB -4.0f      // cut the bass a little: a 40 mm speaker can't play it
+#define RADIO_DEBUG 0                 // 1: log the audio library's messages
+// 1: while playing, log one line every 5 s: input buffer, sample rate, bitrate,
+// WiFi signal. A falling buffer = the network is slower than the station.
+// Set to 0 once the radio plays smoothly.
+#define RADIO_STATS 1
 
 // ---- Settings page on the local network (Stage 4) ----
 #define MDNS_NAME "keycube"          // http://keycube.local

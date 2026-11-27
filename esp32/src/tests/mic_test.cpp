@@ -17,7 +17,7 @@
 #include <Arduino.h>
 #include <math.h>
 
-#include "../audio.h"
+#include "../mic.h"
 #include "../config.h"
 #include "../display.h"
 
@@ -246,7 +246,7 @@ void setup() {
 
   display.begin();
   display.on();
-  display.setRotation(0);
+  display.setRotation(DISPLAY_UPRIGHT_ROTATION);
   if (!mic.start()) {
     display.showMessage("Mic failed", "I2S or PSRAM error. See the serial log.");
     Serial.println("[mic] start failed");

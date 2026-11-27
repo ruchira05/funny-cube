@@ -3,7 +3,7 @@
 // phone setup page and stored in flash (see settings.h).
 #pragma once
 
-#define FW_VERSION "0.3.0-stage3"
+#define FW_VERSION "0.5.0-radio"
 
 // ---- Pins (see ESP32_PLAN.md, pin map) ----
 #define PIN_I2C_SDA 8
@@ -23,24 +23,32 @@
 // 1.3" 128x64 modules are usually SH1106. If the image is shifted by 2 px or
 // garbled, set this to 0 to use the SSD1306 driver.
 #define OLED_SH1106 1
+// Rotation (quarter turns, 0..3 = U8G2_R0..R3) for screens that don't follow a
+// face: boot, setup and configuration pages, and alerts while lying on the back.
+// 2 = turned 180 degrees. The modes on the side faces use FACE_DIR_R0..R3 below.
+#define DISPLAY_UPRIGHT_ROTATION 2
 
 // ---- Touch strip ----
 // On the ESP32-S3 the touchRead() value RISES when touched.
 // Touched when raw > baseline * ON factor, released when raw < baseline * OFF factor.
 // Tune these with the touch_cal test (pio run -e touch_cal -t upload -t monitor).
-// Measured 2026-11-15 (touch.log, mic off): idle noise x1.001, hand on the cube
-// but not the strip x1.002, finger x1.06-1.10. ON sits about halfway, OFF lower
-// for hysteresis. The old 1.10 / 1.05 were above most finger readings.
-#define TOUCH_ON_FACTOR 1.03f
-#define TOUCH_OFF_FACTOR 1.015f
-#define TOUCH_DEBUG 1           // 1: print raw touch values every 500 ms
+// Calibrated 2026-11-26 (touch_cal, new strip on GPIO4): untouched noise x1.000,
+// hand on the cube but not the strip x1.02, finger x2.3-2.9 (mic off) and
+// x1.9-2.4 (mic on, against the mic-on baseline). The mic clock raises the
+// untouched reading x1.09; the baseline is re-measured when it starts or stops.
+// ON is well above a gripping hand but low enough to catch a finger as it lands;
+// OFF stays above the hand for hysteresis.
+#define TOUCH_ON_FACTOR 1.15f
+#define TOUCH_OFF_FACTOR 1.06f
+#define TOUCH_DEBUG 0           // 1: print raw touch values every 500 ms
 #define TOUCH_SAMPLE_MS 10      // sampling interval
 #define TOUCH_FILTER_SAMPLES 3  // consecutive samples needed to change state
 #define TOUCH_TAP_MAX_MS 800    // a press shorter than this is a "tap"
+#define TOUCH_HOLD_MS 1500      // a press this long is a "hold" (stop alarm, reset timer, on/off)
 // Re-measuring the baseline (e.g. when the mic clock starts and raises the
 // untouched reading, x1.09 in touch.log): readings above baseline x this are taken
-// as a finger, and the re-measure waits until it is lifted.
-// TODO: unchanged until the mic-on touch reading is measured (step 5 of touch_cal).
+// as a finger, and the re-measure waits until it is lifted. Measured: mic jump
+// x1.09, finger x2.6 against the mic-off baseline.
 #define TOUCH_REBASE_MAX_FACTOR 1.35f
 
 // ---- Boot gestures (touch held while powering on) ----
@@ -86,19 +94,19 @@
 // What the accelerometer reads {x, y, z} (in g) when the cube rests on each face.
 // To set them: with ACCEL_DEBUG 1, rest the cube on a face, copy the "filt"
 // values from the serial log, rounded to 0, 1 or -1. Only the direction matters.
-// The defaults assume the sensor lies flat behind the screen, X to the right,
-// Y up, Z out of the screen.
+// Sensor mounting (seen from the front, screen upright): X points to the back
+// (into the screen), Y to the right, Z down.
 //
 // Rn = the screen rotation that reads upright on that face (U8G2_R0..R3).
 // To fix text that is upside down or sideways on a face, swap the directions of
 // the two faces involved (e.g. R0 <-> R2). Which mode runs on each face is set in
 // modes.cpp (MODE_FOR_FACE).
-#define FACE_DIR_BACK        { 0,  0,  1}  // lying on the back, screen up  -> Off
-#define FACE_DIR_SCREEN_DOWN { 0,  0, -1}  // lying on the screen           -> Off
-#define FACE_DIR_R0          { 0,  1,  0}  // landscape
-#define FACE_DIR_R1          { 1,  0,  0}  // portrait
-#define FACE_DIR_R2          { 0, -1,  0}  // landscape, upside down
-#define FACE_DIR_R3          {-1,  0,  0}  // portrait, the other way
+#define FACE_DIR_BACK        {-1,  0,  0}  // lying on the back, screen up  -> Radio
+#define FACE_DIR_SCREEN_DOWN { 1,  0,  0}  // lying on the screen           -> Off
+#define FACE_DIR_R0          { 0,  0, -1}  // landscape
+#define FACE_DIR_R1          { 0,  1,  0}  // portrait
+#define FACE_DIR_R2          { 0,  0,  1}  // landscape, upside down
+#define FACE_DIR_R3          { 0, -1,  0}  // portrait, the other way
 
 // ---- Modes and power ----
 #define OFF_SLEEP_DELAY_MS 3000   // on the off face this long, then deep sleep
@@ -110,13 +118,68 @@
 #define MIC_SAMPLE_RATE 16000
 #define MIC_SHIFT 14            // INMP441 24-bit in 32: >> 14 to int16. Quiet? try 13 or 12
 #define MIC_SETTLE_MS 200       // drop audio for this long after the mic starts
-#define AUDIO_DEBUG 1           // log level, length and peak of each recording
+#define AUDIO_DEBUG 0           // log level, length and peak of each recording
 #define RECORD_MAX_MS 10000     // 10 s cap (320 KB in PSRAM)
 #define RECORD_MIN_MS 300       // shorter press = tap (next page / status), not a recording
 #define RECORD_LOCKOUT_MS 300   // after a recording, ignore touch this long
 #define CHAT_TIMEOUT_MS 30000   // server reply (matches nginx proxy_read_timeout)
 #define REPLY_PAGE_MS 5000      // long replies: next page after this long
 #define REPLY_HOLD_MS 20000     // last page stays this long, then back to "Hold to talk"
+
+// ---- Speaker (Stage 4): MAX98357A + 4 ohm 40 mm speaker ----
+// The I2S clock runs all the time (silence when idle): its pins sit next to the
+// touch pin on the header, so a clock that starts and stops would shift the touch
+// reading. The amp itself is off (SD low) between sounds and in deep sleep.
+#define SPK_SAMPLE_RATE 16000
+#define SPK_MAX_AMPLITUDE 0.8f  // of full scale at volume 100 (caps the drive into the speaker)
+#define SPK_DEFAULT_VOLUME 60   // 0..100, changed on the settings page
+#define SPK_ALARM_MIN_VOLUME 30 // the alarm rings at least this loud, even at volume 0
+#define SPK_AMP_WAKE_MS 10      // amp start-up after SD goes high
+// Full volume draws up to about 0.7 A at 5 V. If the cube resets when the alarm
+// rings on a weak USB port, lower the volume.
+
+// ---- Time, alarms and reminders (Stage 4) ----
+#define NTP_RESYNC_MS (6UL * 3600UL * 1000UL)  // re-sync every 6 hours
+#define MAX_ALARMS 4
+#define SNOOZE_MIN 5
+#define ALARM_RING_MAX_MS 600000UL   // stop ringing after 10 minutes
+#define ALARM_RAMP_MS 30000          // ring volume rises from 40% to 100% over 30 s
+#define ALARM_LATE_MAX_S 600         // an alarm found up to 10 min late still rings
+// Deep sleep keeps time with the chip's internal RC clock, which can drift by
+// minutes over a night. So the cube wakes this long before an alarm, joins WiFi
+// to correct the time, and waits awake (screen off) for it.
+#define ALARM_PREWAKE_S 900
+#define REMINDER_SHOW_MS 120000UL    // a reminder not answered in 2 min counts as missed
+#define REMINDER_REPEAT_MS 60000UL   // chime again after 1 min
+#define REMINDER_STALE_S 300         // due over 5 min ago (cube was off): skip, don't fire
+#define NOTICE_SHOW_MS 10000UL       // focus timer notices in other modes
+#define DEFAULT_REMIND_FROM 9        // reminders only between these hours
+#define DEFAULT_REMIND_TO 18
+#define DEFAULT_FOCUS_WORK_MIN 25
+#define DEFAULT_FOCUS_BREAK_MIN 5
+#define DEFAULT_FOCUS_LONG_MIN 15
+#define FOCUS_LONG_EVERY 4           // a long break after every 4 focus periods
+
+// ---- Internet radio (back face: speaker down, screen up) ----
+// Stations are edited on the settings page; the first boot loads the default
+// list in radio.cpp (DEFAULT_STATIONS).
+#define RADIO_MAX_STATIONS 20
+#define RADIO_NAME_MAX 24             // characters
+#define RADIO_URL_MAX 200
+#define RADIO_DEFAULT_VOLUME 50       // 0..100, its own setting (music vs beeps)
+#define RADIO_CONNECT_TIMEOUT_MS 10000  // no audio this long after connecting: retry
+#define RADIO_RETRIES 2               // then show "Station unavailable"
+#define RADIO_RETRY_PAUSE_MS 1500
+#define RADIO_FRAME_MS 60             // screen refresh while animating (about 16 fps)
+#define RADIO_LOW_SHELF_DB -4.0f      // cut the bass a little: a 40 mm speaker can't play it
+#define RADIO_DEBUG 0                 // 1: log the audio library's messages
+// 1: while playing, log one line every 5 s: input buffer, sample rate, bitrate,
+// WiFi signal. A falling buffer = the network is slower than the station.
+// Set to 0 once the radio plays smoothly.
+#define RADIO_STATS 1
+
+// ---- Settings page on the local network (Stage 4) ----
+#define MDNS_NAME "keycube"          // http://keycube.local
 
 // ================================================================
 // DEV-ONLY: remove after development (grep "DEV-ONLY")

@@ -109,7 +109,8 @@ void Touch::update() {
     touched_ = !touched_;
     if (touched_) {
       pressStart_ = now;
-    } else if (now - pressStart_ < TOUCH_TAP_MAX_MS) {
+      holdFired_ = false;
+    } else if (!holdFired_ && now - pressStart_ < TOUCH_TAP_MAX_MS) {
       tapPending_ = true;
     }
   }
@@ -139,4 +140,10 @@ bool Touch::consumeTap() {
   bool t = tapPending_;
   tapPending_ = false;
   return t;
+}
+
+bool Touch::consumeHold(uint32_t ms) {
+  if (!touched_ || holdFired_ || millis() - pressStart_ < ms) return false;
+  holdFired_ = true;
+  return true;
 }

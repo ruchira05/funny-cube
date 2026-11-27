@@ -32,6 +32,13 @@ class Display {
   void showMode(const char* name, const char* label, Icon icon, const String& status);
   void showStatus(const String& ssid, const String& ip, const String& serverLine, bool ok);
 
+  // ---- Stage 4 ----
+  // Digits and ':' in the largest font that fits maxW x maxH, centred on (cx, cy).
+  // Returns the height used.
+  int drawBigText(const char* text, int cx, int cy, int maxW, int maxH);
+  // Text centred horizontally on the screen at baseline y, in the current font.
+  void drawCentered(const char* text, int y);
+
   // Word-wraps text into width w using the current font.
   void drawWrapped(const String& text, int x, int y, int w, int lineH, int maxLines);
 

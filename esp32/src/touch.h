@@ -4,6 +4,8 @@
 
 #include <Arduino.h>
 
+#include "config.h"
+
 class Touch {
  public:
   // Starts the sensor. Uses a stored baseline if given (> 0), so a finger already
@@ -27,6 +29,9 @@ class Touch {
   bool isTouched() const { return touched_; }
   uint32_t heldMs() const { return touched_ ? millis() - pressStart_ : 0; }
   bool consumeTap();  // true once after a short press is released
+  // True once per press, as soon as it has been held for ms (finger still down).
+  // A press that fires this is never also a tap.
+  bool consumeHold(uint32_t ms = TOUCH_HOLD_MS);
 
   // Raw-value check without the filter (used for the power-on gesture).
   bool rawTouched() const { return raw() > baseline_ * onFactor(); }
@@ -42,7 +47,7 @@ class Touch {
   bool touched_ = false;
   uint8_t streak_ = 0;
   uint32_t lastSample_ = 0, lastLog_ = 0, pressStart_ = 0;
-  bool tapPending_ = false;
+  bool tapPending_ = false, holdFired_ = false;
   bool settling_ = false;
   uint32_t settleStart_ = 0, settleRefAt_ = 0, settleRef_ = 0;
   bool rebasing_ = false;

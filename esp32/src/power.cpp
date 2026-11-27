@@ -3,10 +3,12 @@
 #include <driver/rtc_io.h>
 #include <esp_sleep.h>
 
+#include "alarms.h"
 #include "config.h"
 #include "display.h"
 #include "net.h"
 #include "orientation.h"
+#include "speaker.h"
 #include "touch.h"
 
 WakeReason wakeReason() {
@@ -14,6 +16,7 @@ WakeReason wakeReason() {
     case ESP_SLEEP_WAKEUP_UNDEFINED: return WakeReason::PowerOn;
     case ESP_SLEEP_WAKEUP_EXT1: return WakeReason::Motion;
     case ESP_SLEEP_WAKEUP_TOUCHPAD: return WakeReason::Touch;
+    case ESP_SLEEP_WAKEUP_TIMER: return WakeReason::Timer;
     default: return WakeReason::Other;
   }
 }
@@ -23,6 +26,7 @@ const char* wakeReasonName(WakeReason r) {
     case WakeReason::PowerOn: return "power on";
     case WakeReason::Motion: return "motion";
     case WakeReason::Touch: return "touch";
+    case WakeReason::Timer: return "timer (alarm)";
     default: return "other";
   }
 }
@@ -37,11 +41,21 @@ bool usbHostConnected() {
 
 void goToSleep() {
   Serial.println("[sleep] deep sleep: tilt the cube or touch the strip to wake");
+  // Wake ALARM_PREWAKE_S before the next alarm, to re-sync the time and ring.
+  time_t wakeAt = schedule.sleepWakeAt();
+  int64_t wakeIn = wakeAt ? (int64_t)(wakeAt - nowEpoch()) : 0;
+  if (wakeAt) {
+    if (wakeIn < 10) wakeIn = 10;
+    Serial.printf("[sleep] timer wake at %s (alarm at %s)\n", hhmm(nowEpoch() + wakeIn).c_str(),
+                  hhmm(schedule.nextAlarm()).c_str());
+  }
   Serial.flush();
   display.off();
   net.shutdown();
+  speaker.shutdown();
 
   esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
+  if (wakeAt) esp_sleep_enable_timer_wakeup((uint64_t)wakeIn * 1000000ULL);
   // RTC peripherals stay powered for the INT1 pull-down and the touch sensor.
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
 

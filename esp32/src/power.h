@@ -3,7 +3,7 @@
 
 #include <Arduino.h>
 
-enum class WakeReason { PowerOn, Motion, Touch, Other };
+enum class WakeReason { PowerOn, Motion, Touch, Timer, Other };
 
 WakeReason wakeReason();
 const char* wakeReasonName(WakeReason r);
@@ -11,6 +11,7 @@ const char* wakeReasonName(WakeReason r);
 // True while a computer is connected to the native USB port.
 bool usbHostConnected();
 
-// Screen off, WiFi off, arm the wake sources, deep sleep. Does not return:
+// Screen off, WiFi off, amp off, arm the wake sources (and a timer before the
+// next alarm), deep sleep. Does not return:
 // the cube restarts from setup() when it wakes.
 [[noreturn]] void goToSleep();

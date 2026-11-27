@@ -51,6 +51,8 @@ void Display::begin() {
   u8g2.setBusClock(400000);
   u8g2.begin();
   u8g2.enableUTF8Print();
+  rotation_ = 0xFF;  // force the first setRotation through
+  setRotation(DISPLAY_UPRIGHT_ROTATION);
 }
 
 U8G2& Display::gfx() { return u8g2; }
@@ -331,4 +333,29 @@ void Display::showStatus(const String& ssid, const String& ip, const String& ser
   int sy = portrait ? y + 2 * lh + 4 : 50;
   drawWrapped(serverLine, 0, sy, portrait ? w : tw + x, lh, portrait ? 6 : 2);
   u8g2.sendBuffer();
+}
+
+// ---- Stage 4 ----
+
+int Display::drawBigText(const char* text, int cx, int cy, int maxW, int maxH) {
+  // Largest first. The _tn variants hold only digits and a few symbols (":", "-").
+  static const uint8_t* const fonts[] = {
+      u8g2_font_logisoso42_tn, u8g2_font_logisoso38_tn, u8g2_font_logisoso32_tn,
+      u8g2_font_logisoso28_tn, u8g2_font_logisoso24_tn, u8g2_font_logisoso20_tn,
+      u8g2_font_logisoso16_tn, u8g2_font_10x20_tn,
+  };
+  for (const uint8_t* f : fonts) {
+    u8g2.setFont(f);
+    int tw = u8g2.getStrWidth(text), th = u8g2.getAscent();
+    if (tw <= maxW && th <= maxH) {
+      u8g2.drawStr(cx - tw / 2, cy + th / 2, text);
+      return th;
+    }
+  }
+  return 0;
+}
+
+void Display::drawCentered(const char* text, int y) {
+  int w = u8g2.getDisplayWidth(), tw = u8g2.getStrWidth(text);
+  u8g2.drawStr(tw >= w ? 0 : (w - tw) / 2, y, text);
 }

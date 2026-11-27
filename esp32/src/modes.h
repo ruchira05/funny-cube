@@ -1,17 +1,20 @@
 // Mode state machine: the face the cube stands on selects the mode.
-// Stage 2: modes A-D show a placeholder (name and icon). Stages 3-4 fill them in.
+// A: key buddy (keybuddy.cpp), B: alarm and C: health (clockmodes.cpp),
+// D: focus timer and clock (focus.cpp), radio on the back face (radio.cpp),
+// off when lying on the screen. Alarm, reminder and notice alerts
+// (alarms.cpp) show on top of any mode, which pauses underneath.
 #pragma once
 
 #include <Arduino.h>
 
 #include "orientation.h"
 
-enum class Mode { None, Off, KeyBuddy, Alarm, Health, Focus };
+enum class Mode { None, Off, KeyBuddy, Alarm, Health, Focus, Radio };
 
 class Modes {
  public:
   void begin();    // enter the mode for the current face
-  void loop();     // face changes, taps, status overlay, sleep on the off face
+  void loop();     // face changes, schedule, alerts, the current mode, sleep on the off face
   Mode current() const { return mode_; }
 
  private:
@@ -24,7 +27,8 @@ class Modes {
   Face face_ = Face::Unknown;
   bool dirty_ = true;
   uint32_t offSince_ = 0, overlayUntil_ = 0, netVersion_ = 0;
-  bool usbNoSleepLogged_ = false;
+  bool usbNoSleepLogged_ = false, awakeForAlarmLogged_ = false;
+  bool inAlert_ = false;
 };
 
 extern Modes modes;

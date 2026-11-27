@@ -33,7 +33,7 @@ constexpr float MOTION_G_PER_COUNT = 0.063f;
 // Same order as Face, then screen down.
 const float FACE_DIRS[REF_COUNT][3] = {FACE_DIR_BACK, FACE_DIR_R0, FACE_DIR_R1, FACE_DIR_R2,
                                        FACE_DIR_R3,   FACE_DIR_SCREEN_DOWN};
-const char* const REF_NAMES[REF_COUNT] = {"back (off)", "R0", "R1", "R2", "R3",
+const char* const REF_NAMES[REF_COUNT] = {"back (radio)", "R0", "R1", "R2", "R3",
                                           "screen down (off)"};
 
 float dot3(const float a[3], const float b[3]) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
@@ -42,11 +42,12 @@ float norm3(const float a[3]) { return sqrtf(dot3(a, a)); }
 
 const char* faceName(Face f) {
   switch (f) {
-    case Face::Back: return "back (off)";
+    case Face::Back: return "back (radio)";
     case Face::R0: return "R0";
     case Face::R1: return "R1";
     case Face::R2: return "R2";
     case Face::R3: return "R3";
+    case Face::ScreenDown: return "screen down (off)";
     default: return "unknown";
   }
 }
@@ -152,7 +153,7 @@ int Orientation::nearestRef(const float v[3]) const {
 Face Orientation::classify(const float v[3]) const {
   int r = nearestRef(v);
   if (r < 0) return Face::Unknown;
-  return r == REF_SCREEN_DOWN ? Face::Back : (Face)r;  // screen down = off too
+  return (Face)r;
 }
 
 void Orientation::update() {
@@ -209,13 +210,13 @@ Face Orientation::waitForFace(uint32_t timeoutMs) {
 }
 
 // Motion detection on the axes that are near 0 g in the position the cube is
-// resting in (back or screen down): tilting or picking it up pushes one of them
-// past the threshold.
+// resting in (normally screen down, the off face): tilting or picking it up
+// pushes one of them past the threshold.
 void Orientation::armMotionWake() {
   if (!addr_) return;
   float g[3];
   int r = readG(g) ? nearestRef(g) : -1;
-  if (r != REF_SCREEN_DOWN) r = (int)Face::Back;
+  if (r < 0) r = REF_SCREEN_DOWN;
   const float* back = refs_[r];
   uint8_t axes = 0;
   float worst = 0;

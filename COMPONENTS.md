@@ -2,7 +2,7 @@
 
 A standalone PCB: an **ESP32-S3-WROOM-1** module driving a **2.4" 240 × 320 colour TFT (ST7789V)**, with a **LIS3DH accelerometer**, an **I2S MEMS microphone**, and power from **USB-C and a LiPo battery** (charging while in use). The board is **hand-soldered**, so through-hole and larger SMD parts are chosen wherever there is a choice.
 
-The specs come from the datasheets linked at the end, or from the seller's spec sheet where no maker's datasheet exists.
+The circuit diagram is [`display-module-schematic.drawio`](display-module-schematic.drawio) (6 sheets; open it in draw.io / diagrams.net). The specs come from the datasheets linked at the end, or from the seller's spec sheet where no maker's datasheet exists.
 
 ---
 
@@ -37,6 +37,7 @@ The specs come from the datasheets linked at the end, or from the seller's spec 
 | Q1 | N-MOSFET | AO3400A | SOT-23 | 1 | Switches the 80 mA backlight (a GPIO can only give 40 mA), PWM dimming |
 | R1 | Resistor | 4.7 Ω (fit 3.9–6.8 Ω after measuring) | 0805 | 1 | Backlight current limit from 3.3 V |
 | R2 | Resistor | 10 kΩ | 0805 | 1 | Q1 gate pull-down: backlight off while the ESP32 boots |
+| C16 | Capacitor | 100 nF | 0805 | 1 | Display VCC decoupling, at the VCC pad |
 
 ### ESP32-S3 support
 
@@ -108,6 +109,7 @@ LIS3DH straps: CS → 3.3 V (I2C mode), SDO/SA0 → GND (I2C address `0x18`).
 | Ref | Part | Value | Package | Qty | Purpose |
 |---|---|---|---|---|---|
 | C14 | Capacitor | 100 nF | 0805 | 1 | Decoupling |
+| R21 | Resistor | 100 kΩ | 0805 | 1 | Pull-down on SD: discharges the line while the mic tristates it (datasheet) |
 | J3 | Header pads (fallback) | 1 × 6, 2.54 mm | Through-hole | 0–1 | For an INMP441 breakout board instead of U6 |
 
 ICS-43434 strap: SELECT (L/R) → GND (left channel). Drill the sound hole under the mic as the datasheet's land pattern shows.
@@ -331,7 +333,7 @@ About 0.2 A typical and 0.45–0.55 A peak on the 3.3 V rail, within the AP2112K
 [devkitc]: https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32s3/esp32-s3-devkitc-1/index.html
 [st7789v]: https://www.newhavendisplay.com/appnotes/datasheets/LCDs/ST7789V.pdf
 [lis3dh]: https://www.st.com/resource/en/datasheet/lis3dh.pdf
-[ics43434]: https://invensense.tdk.com/wp-content/uploads/2016/02/DS-000069-ICS-43434-v1.2.pdf
+[ics43434]: https://cdn.sparkfun.com/assets/a/9/c/9/1/DS-000069-ICS-43434-v1.2.pdf
 [mcp73831]: https://ww1.microchip.com/downloads/en/DeviceDoc/MCP73831-Family-Data-Sheet-DS20001984H.pdf
 [ap2112]: https://www.diodes.com/assets/Datasheets/AP2112.pdf
 [dmg2305]: https://www.diodes.com/assets/Datasheets/DMG2305UX.pdf

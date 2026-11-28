@@ -1,16 +1,6 @@
-# Key Cube – Components and datasheets
+# ESP32-S3 display module – Components and datasheets
 
-Every part in the cube, with its key specs, its pins, and links to its datasheet. This branch starts empty, with no history from `main`. File paths such as `esp32/src/config.h` and `RADIO_PLAN.md` refer to the `main` branch. The specs come from the datasheets linked below, or from the seller's spec sheet where no maker's datasheet exists.
-
-The **bare-module build** (this branch) changes two parts:
-
-| Now (prototype) | Bare-module build | Why |
-|---|---|---|
-| ESP32-S3 DevKitC-1 N16R8 board (65 × 29 mm) | **ESP32-S3-WROOM-1 module** (18 × 25.5 mm), on our own board | Much smaller. The board adds the 3.3 V regulator, USB-C, reset and boot buttons that the DevKit had |
-| 1.3" 128 × 64 mono OLED, I2C | **2.4" 240 × 320 colour TFT, ST7789V, SPI** | Colour, higher resolution, bigger faces and text |
-| MAX98357A amplifier + 40 mm speaker | **Removed** | No speaker in this build (see [Removed parts](#removed-parts)) |
-
-All other parts stay as they are.
+A standalone module: an **ESP32-S3-WROOM-1** module driving a **2.4" 240 × 320 colour TFT (ST7789V)** over SPI. This file lists both parts with their key specs, pins and datasheets, and the support parts the bare module needs around it. The specs come from the datasheets linked below, or from the seller's spec sheet where no maker's datasheet exists.
 
 ---
 
@@ -20,33 +10,24 @@ All other parts stay as they are.
 |---|---|---|---|---|---|---|
 | 1 | ESP32-S3-WROOM-1 (N8R2 / N8R8 / N16R8) | Dual-core 240 MHz, WiFi 2.4 GHz, BLE 5, PCB antenna | 3.0–3.6 V, ≥ 0.5 A | 41 pins, castellated | [Module][wroom] | EC Buying (online) |
 | 2 | 2.4" TFT LCD, ST7789V | 240 × 320, 262K colours, 4 white LED backlight | 3.3 V | 4-wire SPI | [ST7789V][st7789v] | EC Buying (online) |
-| 3 | ESP32-S3 DevKitC-1 N16R8 (prototype) | WROOM-1 N16R8 on a dev board | 5 V USB or 3.3 V | 2 × 22 pin header | [Board guide][devkitc] | [tronic.lk][t-devkit] |
-| 4 | 1.3" OLED, SH1106 (prototype) | 128 × 64 mono, white | 3.3 V | I2C `0x3C` | [SH1106][sh1106] | [tronic.lk][t-oled] |
-| 5 | INMP441 MEMS microphone | 24-bit, omnidirectional | 1.8–3.3 V | I2S | [INMP441][inmp441] | [tronic.lk][t-mic] |
-| 6 | MMA8452Q accelerometer (GY-45 board) | 3-axis, ±2/4/8 g, 12-bit | 1.95–3.6 V | I2C `0x1C`/`0x1D` | [MMA8452Q][mma] | [tronic.lk][t-accel] |
-| 7 | Touch strip (copper or aluminium foil) | About 31 × 5.5 mm | — | ESP32 touch pin | — | Hardware shop |
-| 8 | LiPo battery 3.7 V 800 mAh | 10 × 25 × 47 mm (measured), JST-PH | — | — | Seller page | [tronic.lk][t-bat] |
-| 9 | TP4056 USB-C charger with protection | 4.2 V CC/CV, 1 A default | 5 V USB-C | — | [TP4056][tp4056], [DW01A][dw01a] | [tronic.lk][t-chg] |
-| 10 | Mini boost converter 5/8/9/12 V | Set to 5 V for the board | 3–4.2 V in | — | Seller page | [tronic.lk][t-boost] |
 
 ---
 
 ## 1. ESP32-S3-WROOM-1 module
 
-**Datasheets:** [ESP32-S3-WROOM-1/1U module][wroom] · [ESP32-S3 chip][s3chip] · [Technical reference manual][s3trm] · [Hardware design guidelines][hwguide]
+**Datasheets:** [ESP32-S3-WROOM-1/1U module][wroom] · [ESP32-S3 chip][s3chip] · [Technical reference manual][s3trm] · [Hardware design guidelines][hwguide] · Reference design: [ESP32-S3-DevKitC-1][devkitc]
 
 ### Which variant
 
 The listing sold three variants. They differ only in memory, but that decides which pins are free and how the firmware is built. **Check the marking on the metal shield** (e.g. `ESP32-S3-WROOM-1 N16R8`).
 
-| Variant | Flash | PSRAM | GPIO 35, 36, 37 | Temperature | PlatformIO memory setting |
+| Variant | Flash | PSRAM | GPIO 35, 36, 37 | Temperature | PlatformIO memory type |
 |---|---|---|---|---|---|
 | N8R2 | 8 MB (Quad) | 2 MB (Quad) | Free | −40 to 85 °C | `qio_qspi` |
 | N8R8 | 8 MB (Quad) | 8 MB (Octal) | **Used by PSRAM** | −40 to 65 °C | `qio_opi` |
-| N16R8 | 16 MB (Quad) | 8 MB (Octal) | **Used by PSRAM** | −40 to 65 °C | `qio_opi` (the current firmware) |
+| N16R8 | 16 MB (Quad) | 8 MB (Octal) | **Used by PSRAM** | −40 to 65 °C | `qio_opi` |
 
-- The firmware today is built for N16R8 (`esp32/platformio.ini`: 16 MB flash, `default_16MB.csv`, `qio_opi`). For N8R8, change the flash size to 8 MB and the partitions to `default_8MB.csv`. For N8R2, also change the memory type to `qio_qspi`.
-- 2 MB of PSRAM (N8R2) is enough for the 320 KB recording buffer and a 150 KB colour frame buffer.
+- PlatformIO: `board = esp32-s3-devkitc-1`, then set `board_upload.flash_size` (8MB or 16MB), `board_build.partitions` (`default_8MB.csv` or `default_16MB.csv`), `board_build.arduino.memory_type` from the table, and `-DBOARD_HAS_PSRAM`. With the wrong memory type, PSRAM reads as 0 or the board boot-loops.
 - Design the board as if GPIO 35–37 are taken: then any variant fits.
 
 ### Key specs (module datasheet)
@@ -62,13 +43,13 @@ The listing sold three variants. They differ only in memory, but that decides wh
 
 ### What the module needs around it
 
-The DevKit board had all of this. On our own board we add it. From the module datasheet's peripheral schematic and the hardware design guidelines:
+A bare module has no regulator, buttons or USB connector. From the module datasheet's peripheral schematic and the hardware design guidelines:
 
-- **3.3 V regulator** that delivers at least 500 mA, with 22 µF + 0.1 µF next to the 3V3 pin.
+- **3.3 V regulator** that delivers at least 500 mA (better 0.8–1 A with the display backlight), with 22 µF + 0.1 µF next to the 3V3 pin.
 - **EN (reset):** must not float. Use a 10 kΩ pull-up to 3.3 V and 1 µF to GND (a reset delay), plus a RESET button to GND.
 - **GPIO 0 (BOOT):** a BOOT button to GND. Hold it while pressing RESET to enter the download mode.
-- **USB-C for flashing:** D− to GPIO 19, D+ to GPIO 20, with 5.1 kΩ resistors from CC1 and CC2 to GND so a USB-C charger or computer supplies 5 V.
-- **Antenna:** keep copper, metal and the battery away from the antenna end (the keep-out area is drawn in the datasheet). In the cube, the antenna end should face an acrylic wall, not the battery.
+- **USB-C for power and flashing:** D− to GPIO 19, D+ to GPIO 20, with 5.1 kΩ resistors from CC1 and CC2 to GND so a USB-C charger or computer supplies 5 V.
+- **Antenna:** keep copper, metal and batteries away from the antenna end (the keep-out area is drawn in the module datasheet).
 
 ### Pin rules (from the datasheet)
 
@@ -77,17 +58,21 @@ The DevKit board had all of this. On our own board we add it. From the module da
 - **GPIO 19, 20**: USB. **GPIO 43, 44**: UART0 (serial log).
 - Touch sensing works only on GPIO 1–14. Deep-sleep wake works only on GPIO 0–21.
 
-### Pins the cube uses (from `esp32/src/config.h`)
+### Suggested pins for the display
 
-| Function | GPIO |
-|---|---|
-| I2C SDA / SCL (accelerometer; the OLED on the prototype) | 8 / 9 |
-| Touch strip | 4 |
-| Accelerometer INT1 (motion wake) | 10 |
-| Mic SCK / WS / SD | 5 / 6 / 7 |
-| USB D− / D+ | 19 / 20 |
+The SPI2 (FSPI) peripheral has fixed IO MUX pins on GPIO 10–13. Using them gives the fastest SPI clock, without going through the GPIO matrix.
 
-Still free for the TFT: GPIO 1, 2, 11, 12, 13, 14, 15, 16, 17, 18, 21, 38, 39, 40, 41, 42, 47, 48 (and 35–37 on N8R2 only). GPIO 15–18 were the amplifier's on the prototype. The TFT pins are chosen in the circuit diagram.
+| Display signal | GPIO | Note |
+|---|---|---|
+| SCL (SPI clock) | 12 | FSPICLK |
+| SDA (SPI MOSI) | 11 | FSPID |
+| CS | 10 | FSPICS0 |
+| SDO (SPI MISO) | 13 | FSPIQ, optional |
+| RS (D/C) | 9 | Any free GPIO |
+| RST | 14 | Any free GPIO, or tie to the module's EN reset |
+| Backlight PWM (to the transistor) | 21 | Any free GPIO with PWM (LEDC) |
+
+These are a suggestion, not fixed yet. The final pins are set in the circuit diagram.
 
 ---
 
@@ -115,8 +100,8 @@ Three versions were sold:
 
 | Version | Connector | Pitch | What it needs |
 |---|---|---|---|
-| 10-pin bare, welded type | FPC tail, solder-on | 1.0 mm | A 10-pin 1.0 mm FPC connector or adapter board, and our own backlight driver |
-| 10-pin bare, spliced type | FPC tail | 0.5 mm | A 10-pin 0.5 mm FPC connector or adapter board, and our own backlight driver |
+| 10-pin bare, welded type | FPC tail, solder-on | 1.0 mm | A 10-pin 1.0 mm FPC connector or adapter board, and a backlight driver |
+| 10-pin bare, spliced type | FPC tail | 0.5 mm | A 10-pin 0.5 mm FPC connector or adapter board, and a backlight driver |
 | 8-pin module | Pin header | 2.54 mm | Plugs in. The backlight resistor is on the module |
 
 ### 10-pin bare FPC pinout
@@ -147,135 +132,8 @@ Three versions were sold:
 ### Notes
 
 - **Backlight:** 80 mA is more than a GPIO can drive (40 mA). Switch the cathode (K) with a small N-MOSFET or NPN transistor from a PWM pin. From 3.3 V, a resistor of a few ohms limits the current (for example (3.3 V − 3.0 V) / 80 mA ≈ 3.9 Ω). Check the real current with a multimeter.
-- **Power:** the backlight is the biggest steady load after WiFi. Dim it or turn it off on the off face.
-- **Memory:** a full colour frame is 240 × 320 × 2 bytes = 150 KB. It goes in PSRAM. Partial updates (only the part of the screen that changed) save SPI time.
-- **Firmware:** the current screens use U8g2 for the mono OLED. The colour display needs a colour driver (for example LovyanGFX or TFT_eSPI) and new screen code.
-
----
-
-## 3. ESP32-S3 DevKitC-1 N16R8 (prototype board)
-
-**Docs:** [ESP32-S3-DevKitC-1 user guide][devkitc]
-
-The board used so far: an ESP32-S3-WROOM-1 N16R8 with a 3.3 V regulator, two USB-C ports (native USB and USB-serial), and BOOT and RESET buttons. It is the reference for what the bare-module board must provide.
-
----
-
-## 4. 1.3" OLED, SH1106 (prototype display)
-
-**Datasheet:** [SH1106 controller][sh1106]
-
-| Item | Value |
-|---|---|
-| Resolution | 128 × 64, white |
-| Interface | I2C, address `0x3C` |
-| Supply | 3.3 V |
-| Wiring | GND · VCC → 3V3 · SCL → GPIO 9 · SDA → GPIO 8 |
-
-Replaced by the 2.4" TFT in the bare-module build. The firmware selects SH1106 or SSD1306 with `OLED_SH1106` in `config.h`.
-
----
-
-## 5. INMP441 I2S microphone
-
-**Datasheet:** [INMP441 (TDK InvenSense)][inmp441]
-
-| Item | Value |
-|---|---|
-| Output | 24-bit I2S, left-aligned in 32-bit slots |
-| Supply | 1.8–3.3 V, about 1.4 mA |
-| Performance | SNR 61 dBA, sensitivity −26 dBFS, 60 Hz – 15 kHz |
-| Wiring | VDD → 3V3 · GND · L/R → GND (left channel) · SCK → GPIO 5 · WS → GPIO 6 · SD → GPIO 7 |
-
-The mic clock on GPIO 5 raises the touch reading on GPIO 4: the firmware re-measures the touch baseline when the mic starts and stops.
-
----
-
-## 6. MMA8452Q accelerometer (GY-45 board)
-
-**Datasheet:** [MMA8452Q (NXP)][mma]
-
-| Item | Value |
-|---|---|
-| Range | ±2, ±4 or ±8 g, 12-bit (the firmware uses ±2 g) |
-| Supply | 1.95–3.6 V (I/O 1.6–3.6 V), 6–165 µA |
-| Output rate | 1.56–800 Hz (50 Hz awake, 12.5 Hz for motion wake) |
-| Interface | I2C, address `0x1C` or `0x1D` |
-| Interrupts | INT1 and INT2: motion and freefall, used for wake from deep sleep |
-| Wiring | VCC → 3V3 · GND · SDA → GPIO 8 · SCL → GPIO 9 · INT1 → GPIO 10 |
-
-Mount it flat behind the screen, X to the right and Y up, to match the face directions in `config.h`.
-
----
-
-## 7. Touch strip
-
-Copper or aluminium foil tape, about 31 × 5.5 mm, inside the front panel, covered with Kapton tape. One short wire to GPIO 4 (touch channel 4). Keep the wire short and away from the I2C and I2S clock wires.
-
----
-
-## 8. LiPo battery, 3.7 V 800 mAh
-
-**Datasheet:** none published: see the [seller page][t-bat].
-
-| Item | Value |
-|---|---|
-| Nominal / full | 3.7 V / 4.2 V |
-| Capacity | 800 mAh |
-| Size | 10 × 25 × 47 mm (measured) |
-| Plug | JST-PH 2.0. Check the polarity with a multimeter: it is not standard between sellers |
-
-Charge current should stay at or below 1C (800 mA). See the charger note below.
-
----
-
-## 9. TP4056 USB-C charger with protection
-
-**Datasheets:** [TP4056 charger IC][tp4056] · [DW01A protection IC][dw01a]
-
-| Item | Value |
-|---|---|
-| Charging | Constant current, then constant voltage at 4.2 V (±1.5 %) |
-| Charge current | Set by R_PROG: 1.2 kΩ = 1000 mA (the usual module default), 1.5 kΩ = 780 mA, 2 kΩ = 580 mA |
-| Protection | DW01A + dual MOSFET: over-charge, over-discharge, short circuit |
-| LEDs | Red = charging, green = full |
-| Wiring | USB-C in · B+/B− → LiPo · OUT+/OUT− → boost converter IN |
-
-**Check before use:** most TP4056 modules ship with 1.2 kΩ (marked `122`), which charges at 1 A: more than 1C for an 800 mAh cell. Replacing it with 1.5 kΩ (780 mA) or 2 kΩ (580 mA) is gentler on the battery.
-
----
-
-## 10. Mini boost converter, 5 / 8 / 9 / 12 V
-
-**Datasheet:** none from the seller: see the [seller page][t-boost]. Read the chip marking if a datasheet is needed.
-
-| Item | Value |
-|---|---|
-| Input | The LiPo through the charger, 3.0–4.2 V |
-| Output | Set by solder pads. **Ships at 12 V:** open pads A and B for 5 V, and measure before connecting anything |
-| Feeds | 5 V to the board (DevKit 5V pin now, the 3.3 V regulator on the bare-module board) |
-
----
-
-With the amplifier gone, nothing needs 5 V any more except the input of the 3.3 V regulator. A low-dropout 3.3 V regulator fed straight from the battery could replace the boost converter, but it stops regulating once the battery falls below about 3.4–3.5 V, so part of the capacity goes unused. Decide this in the circuit diagram.
-
----
-
-## Removed parts
-
-The bare-module build has **no speaker and no amplifier**:
-
-| Part | Was | Frees |
-|---|---|---|
-| MAX98357A I2S amplifier | Class D, 3.2 W into 4 Ω, I2S on GPIO 15/16/17, shutdown on GPIO 18 | GPIO 15–18, the 5 V amp supply, the up to 0.7 A peak |
-| Speaker 4 Ω 5 W, 40 mm | In the back lid behind the grille | The back-lid grille and about 40 × 20 mm of space |
-
-What this means for the firmware (to be changed for this build):
-
-- **Alarms** can only flash the screen. A silent alarm is easy to sleep through.
-- **Health reminders, focus timer, key buddy:** no chime or beeps; the screens still work.
-- **Radio** (`RADIO_PLAN.md`) needs a speaker, so it can't run on this build.
-- `speaker.cpp` must not start its I2S clock: nothing is wired to GPIO 15–18.
+- **Memory:** a full colour frame is 240 × 320 × 2 bytes = 150 KB. It fits in PSRAM on all three module variants. Partial updates (only the part of the screen that changed) save SPI time.
+- **Firmware:** a colour driver library that supports the ST7789, for example LovyanGFX or TFT_eSPI.
 
 ---
 
@@ -284,12 +142,10 @@ What this means for the firmware (to be changed for this build):
 | Load | Typical | Peak | Source |
 |---|---|---|---|
 | ESP32-S3, WiFi on | 80–100 mA (estimate) | 355 mA (WiFi transmit) | Peak: module datasheet |
-| 2.4" TFT backlight | 80 mA (full) | 80 mA | Seller spec |
-| TFT logic | A few mA (estimate) | — | — |
-| INMP441 | 1.4 mA | — | Datasheet |
-| MMA8452Q | 0.165 mA | — | Datasheet |
+| Display backlight | 80 mA (full) | 80 mA | Seller spec |
+| Display logic | A few mA (estimate) | — | — |
 
-From the battery side, through the 5 V boost and the 3.3 V regulator, expect roughly 0.3–0.4 A in normal use with the screen on, and short peaks around 0.6 A during a WiFi transmit. The boost converter and the battery protection must handle those peaks, or the cube resets. The 3.3 V regulator must be rated for at least 0.5 A (module datasheet), better 0.8–1 A for the ESP32 plus the backlight.
+Plan for about 0.2 A typical and 0.45 A peak on the 3.3 V rail. A 3.3 V regulator rated for 0.8–1 A leaves margin.
 
 ---
 
@@ -301,16 +157,3 @@ From the battery side, through the 5 V boost and the 3.3 V regulator, expect rou
 [hwguide]: https://docs.espressif.com/projects/esp-hardware-design-guidelines/en/latest/esp32s3/index.html
 [devkitc]: https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32s3/esp32-s3-devkitc-1/index.html
 [st7789v]: https://www.newhavendisplay.com/appnotes/datasheets/LCDs/ST7789V.pdf
-[sh1106]: https://cdn.velleman.eu/downloads/29/infosheets/sh1106_datasheet.pdf
-[inmp441]: https://invensense.tdk.com/wp-content/uploads/2015/02/INMP441.pdf
-[mma]: https://www.nxp.com/docs/en/data-sheet/MMA8452Q.pdf
-[tp4056]: https://dlnmh9ip6v2uc.cloudfront.net/datasheets/Prototyping/TP4056.pdf
-[dw01a]: https://www.best-microcontroller-projects.com/support-files/dw01a.pdf
-
-[t-devkit]: https://tronic.lk/product/esp32-s3-devkitc-1-dev-board-n16r8-wifi-bluetooth-iot
-[t-oled]: https://tronic.lk/product/1-3-inch-128x64-oled-display-module-white-i2c-iic
-[t-mic]: https://tronic.lk/product/inmp441-omnidirectional-microphone-module-i2s-interface
-[t-accel]: https://tronic.lk/product/mma8452-3-axis-accelerometer-module-gy-45
-[t-bat]: https://tronic.lk/product/3-7v-800mah-lipo-battery
-[t-chg]: https://tronic.lk/product/tp4056-5v-1a-type-c-18650-lithium-battery-charging-modu
-[t-boost]: https://tronic.lk/product/multi-function-mini-boost-module-step-up-board-58912v-1

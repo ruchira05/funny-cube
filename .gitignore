@@ -1,0 +1,46 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Audio test files
+*.wav
+*.aiff
+*.pcm
+
+# ESP32 / PlatformIO
+esp32/.pio/
+esp32/.vscode/.browse.c_cpp.db*
+esp32/.vscode/c_cpp_properties.json
+esp32/.vscode/launch.json
+esp32/.vscode/ipch
+
+# Blender autosave backups
+*.blend1
+*.blend2
+
+# draw.io backups
+*.drawio.bkp
+.$*.drawio*
+
+# Logs
+*.log
+logs.txt
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# macOS / editors
+.DS_Store
+.idea/
+*.swp
+
+# Archived old models and backups (local only)
+archive/

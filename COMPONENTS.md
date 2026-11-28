@@ -1,6 +1,6 @@
 # Key Cube – Components and datasheets
 
-Every part in the cube, with its key specs, its pins, and links to its datasheet. The specs come from the datasheets linked below, or from the seller's spec sheet where no maker's datasheet exists.
+Every part in the cube, with its key specs, its pins, and links to its datasheet. This branch starts empty, with no history from `main`. File paths such as `esp32/src/config.h` and `RADIO_PLAN.md` refer to the `main` branch. The specs come from the datasheets linked below, or from the seller's spec sheet where no maker's datasheet exists.
 
 The **bare-module build** (this branch) changes two parts:
 
